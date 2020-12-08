@@ -475,15 +475,14 @@ class QuarkusCxfProcessor {
                         ResultHandle getterListRH = createWrapperObject.invokeVirtualMethod(getter, wrapperRH);
                         ResultHandle listValRH = createWrapperObject.invokeInterfaceMethod(LIST_GET, listRH,
                                 createWrapperObject.load(i));
-                        createWrapperObject.checkCast(listValRH, List.class);
-                        BranchResult isNullBranch = createWrapperObject.ifNull(getterListRH);
+                        ResultHandle listValListRH = createWrapperObject.checkCast(listValRH, List.class);
+                        BranchResult isNullBranch = createWrapperObject.ifNull(listValListRH);
                         try (BytecodeCreator getterValIsNull = isNullBranch.trueBranch()) {
-                            getterValIsNull.checkCast(listValRH, getter.getReturnType());
                             getterValIsNull.invokeVirtualMethod(setter, wrapperRH, listValRH);
 
                         }
                         try (BytecodeCreator getterValIsNotNull = isNullBranch.falseBranch()) {
-                            getterValIsNotNull.invokeInterfaceMethod(LIST_ADDALL, getterListRH, listValRH);
+                            getterValIsNotNull.invokeInterfaceMethod(LIST_ADDALL, getterListRH, listValListRH);
                         }
                     } else {
                         boolean isJaxbElement = isAssignableFrom(JAXBElement.class.getName(), tp);
@@ -491,9 +490,7 @@ class QuarkusCxfProcessor {
                         ResultHandle listValRH = createWrapperObject.invokeInterfaceMethod(LIST_GET, listRH,
                                 createWrapperObject.load(i));
                         if (DescriptorUtils.isPrimitive(getter.getReturnType())) {
-                            if (tp != null) {
-                                createWrapperObject.invokeVirtualMethod(setter, wrapperRH, listValRH);
-                            }
+                            createWrapperObject.invokeVirtualMethod(setter, wrapperRH, listValRH);
                         } else if (isJaxbElement) {
                             ResultHandle factoryRH = createWrapperObject.readInstanceField(factoryField.getFieldDescriptor(),
                                     createWrapperObject.getThis());
@@ -506,10 +503,8 @@ class QuarkusCxfProcessor {
 
                             createWrapperObject.invokeVirtualMethod(setter, wrapperRH, jaxbSetRH);
                         } else if (isArray(getter.getReturnType())) {
-                            createWrapperObject.checkCast(listValRH, getter.getReturnType());
                             createWrapperObject.invokeVirtualMethod(setter, wrapperRH, listValRH);
                         } else {
-                            createWrapperObject.checkCast(listValRH, getter.getReturnType());
                             createWrapperObject.invokeVirtualMethod(setter, wrapperRH, listValRH);
                         }
                     }
