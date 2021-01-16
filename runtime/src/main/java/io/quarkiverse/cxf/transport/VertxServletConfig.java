@@ -9,7 +9,7 @@ import javax.servlet.ServletContext;
 public class VertxServletConfig implements ServletConfig {
     @Override
     public String getServletName() {
-        return null;
+        return "quarkusCXFServlet";
     }
 
     @Override

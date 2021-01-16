@@ -9,13 +9,19 @@ import java.io.UnsupportedEncodingException;
 import java.net.MalformedURLException;
 import java.net.URL;
 import java.security.Principal;
+import java.text.ParseException;
+import java.text.SimpleDateFormat;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.Date;
 import java.util.Enumeration;
+import java.util.HashMap;
 import java.util.Locale;
 import java.util.Map;
 import java.util.TreeMap;
+import java.util.stream.Collectors;
 
 import javax.servlet.AsyncContext;
 import javax.servlet.DispatcherType;
@@ -36,9 +42,15 @@ import javax.servlet.http.Part;
 import org.apache.cxf.common.util.UrlUtils;
 import org.jboss.logging.Logger;
 
+import com.sun.security.auth.UserPrincipal;
+
+import io.quarkus.security.identity.CurrentIdentityAssociation;
+import io.quarkus.security.identity.SecurityIdentity;
 import io.quarkus.vertx.http.runtime.VertxInputStream;
+import io.vertx.core.MultiMap;
 import io.vertx.core.http.HttpServerRequest;
 import io.vertx.core.http.HttpServerResponse;
+import io.vertx.ext.web.LanguageHeader;
 import io.vertx.ext.web.RoutingContext;
 
 public class VertxHttpServletRequest implements HttpServletRequest {
@@ -165,14 +177,16 @@ public class VertxHttpServletRequest implements HttpServletRequest {
 
     @Override
     public Locale getLocale() {
-        LOG.trace("getLocale()");
-        return null;
+        LanguageHeader languageHeader = context.preferredLanguage();
+        //language country variant
+        return new Locale(languageHeader.tag(), languageHeader.subtag(1), languageHeader.subtag(2));
     }
 
     @Override
     public Enumeration<Locale> getLocales() {
-        LOG.trace("getLocales()");
-        return null;
+        return Collections.enumeration(context.acceptableLanguages().stream()
+                .map(languageHeader -> new Locale(languageHeader.tag(), languageHeader.subtag(1), languageHeader.subtag(2)))
+                .collect(Collectors.toCollection(ArrayList::new)));
     }
 
     @Override
@@ -180,19 +194,22 @@ public class VertxHttpServletRequest implements HttpServletRequest {
         if (LOG.isTraceEnabled()) {
             LOG.tracef("getParameter({0})", name);
         }
-        return null;
+        return request.getParam(name);
     }
 
     @Override
     public Map<String, String[]> getParameterMap() {
         LOG.trace("getParameterMap()");
-        return null;
+        Map<String, String[]> res = new HashMap<>();
+        MultiMap params = request.params();
+        params.names().forEach(name -> res.put(name, params.getAll(name).toArray(new String[0])));
+        return res;
     }
 
     @Override
     public Enumeration<String> getParameterNames() {
         LOG.trace("getParameterNames()");
-        return null;
+        return Collections.enumeration(request.params().names());
     }
 
     @Override
@@ -200,7 +217,7 @@ public class VertxHttpServletRequest implements HttpServletRequest {
         if (LOG.isTraceEnabled()) {
             LOG.tracef("getParameterValues({0})", name);
         }
-        return null;
+        return request.params().getAll(name).toArray(new String[0]);
     }
 
     @Override
@@ -289,7 +306,7 @@ public class VertxHttpServletRequest implements HttpServletRequest {
     @Override
     public boolean isSecure() {
         LOG.trace("isSecure");
-        return false;
+        return request.isSSL();
     }
 
     @Override
@@ -342,12 +359,22 @@ public class VertxHttpServletRequest implements HttpServletRequest {
     @Override
     public Cookie[] getCookies() {
         LOG.trace("getCookies");
-        return null;
+        return context.cookieMap().values().stream()
+                .map(c -> new Cookie(c.getName(), c.getValue())).toArray(Cookie[]::new);
     }
 
     @Override
     public long getDateHeader(String name) {
         LOG.trace("getDateHeader");
+        Date dt = null;
+        try {
+            dt = SimpleDateFormat.getDateInstance().parse(request.headers().get(name));
+        } catch (ParseException e) {
+            e.printStackTrace();
+        }
+        if (dt != null) {
+            return dt.getTime();
+        }
         return 0;
     }
 
@@ -423,7 +450,7 @@ public class VertxHttpServletRequest implements HttpServletRequest {
     @Override
     public String getRemoteUser() {
         LOG.trace("getRemoteUser");
-        return null;
+        return context.user().principal().getString("username", "");
     }
 
     @Override
@@ -442,7 +469,7 @@ public class VertxHttpServletRequest implements HttpServletRequest {
     @Override
     public String getRequestedSessionId() {
         LOG.trace("getRequestedSessionId");
-        return null;
+        return context.session().id();
     }
 
     @Override
@@ -464,8 +491,7 @@ public class VertxHttpServletRequest implements HttpServletRequest {
 
     @Override
     public Principal getUserPrincipal() {
-        LOG.trace("getUserPrincipal");
-        return null;
+        return new UserPrincipal(context.user().principal().getString("username", ""));
     }
 
     @Override
@@ -490,13 +516,18 @@ public class VertxHttpServletRequest implements HttpServletRequest {
     @Override
     public boolean isRequestedSessionIdValid() {
         LOG.trace("isRequestedSessionIdValid");
-        return false;
+        return !context.session().isDestroyed();
     }
 
     @Override
     public boolean isUserInRole(String role) {
         LOG.trace("isUserInRole");
-        return false;
+        SecurityIdentity user = CurrentIdentityAssociation.current();
+        if (role.equals("**")) {
+            return !user.isAnonymous();
+        } else {
+            return user.hasRole(role);
+        }
     }
 
     @Override
