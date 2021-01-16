@@ -14,4 +14,7 @@ public interface GreetingClientWebService {
     @WebMethod
     @RequestWrapper(localName = "Ping", targetNamespace = "http://cxf.it.quarkiverse.io/", className = "io.quarkiverse.it.cxf.Ping")
     String ping(@WebParam(name = "text") String text);
+
+    @WebMethod
+    String getUserName();
 }

@@ -50,6 +50,7 @@ import io.quarkus.vertx.http.runtime.VertxInputStream;
 import io.vertx.core.MultiMap;
 import io.vertx.core.http.HttpServerRequest;
 import io.vertx.core.http.HttpServerResponse;
+import io.vertx.ext.auth.User;
 import io.vertx.ext.web.LanguageHeader;
 import io.vertx.ext.web.RoutingContext;
 
@@ -491,7 +492,8 @@ public class VertxHttpServletRequest implements HttpServletRequest {
 
     @Override
     public Principal getUserPrincipal() {
-        return new UserPrincipal(context.user().principal().getString("username", ""));
+        User user = context.user();
+        return new UserPrincipal(user != null ? user.principal().getString("username", "") : "");
     }
 
     @Override

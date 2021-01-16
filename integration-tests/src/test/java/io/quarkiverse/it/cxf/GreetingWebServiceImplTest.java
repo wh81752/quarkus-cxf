@@ -27,6 +27,11 @@ class GreetingWebServiceImplTest {
     }
 
     @Test
+    void testUserName() {
+        Assertions.assertEquals("foo", greetingWS.getUserName());
+    }
+
+    @Test
     void testSoapEndpoint() {
         String xml = "<x:Envelope xmlns:x=\"http://schemas.xmlsoap.org/soap/envelope/\" xmlns:cxf=\"http://cxf.it.quarkiverse.io/\">\n"
                 +
