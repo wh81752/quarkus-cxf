@@ -6,6 +6,7 @@ import java.util.List;
 import javax.enterprise.context.ApplicationScoped;
 
 import org.jboss.logging.Logger;
+import org.wildfly.common.annotation.Nullable;
 
 import io.quarkus.arc.Unremovable;
 
@@ -33,8 +34,55 @@ public class CXFClientInfo {
     public CXFClientInfo() {
     }
 
-    public void init(String sei, String endpointAddress, String wsdlUrl, String soapBinding, String wsNamespace,
-            String wsName, String epNamespace, String epName, String username, String password, List<String> classNames) {
+    public CXFClientInfo(
+            String sei,
+            String endpointAddress,
+            String soapBinding,
+            String wsNamespace,
+            String wsName,
+            List<String> classNames,
+            @Nullable CxfEndpointConfig cxfEndPointConfig) {
+        this.sei = sei;
+        this.endpointAddress = endpointAddress;
+        this.wsdlUrl = null;
+        this.soapBinding = soapBinding;
+        this.wsNamespace = wsNamespace;
+        this.wsName = wsName;
+        this.epNamespace = null;
+        this.epName = null;
+        this.classNames = classNames;
+        this.username = null;
+        this.password = null;
+        this.inInterceptors = new ArrayList<>();
+        this.outInterceptors = new ArrayList<>();
+        this.outFaultInterceptors = new ArrayList<>();
+        this.inFaultInterceptors = new ArrayList<>();
+        this.features = new ArrayList<>();
+
+        if (cxfEndPointConfig != null) {
+            this.wsdlUrl = cxfEndPointConfig.wsdlPath.orElse(null);
+            this.epNamespace = cxfEndPointConfig.endpointNamespace.orElse(null);
+            this.epName = cxfEndPointConfig.endpointName.orElse(null);
+            this.username = cxfEndPointConfig.username.orElse(null);
+            this.password = cxfEndPointConfig.password.orElse(null);
+        }
+
+        addFeatures(cxfEndPointConfig);
+        addInterceptors(cxfEndPointConfig);
+    }
+
+    public void init(
+            String sei,
+            String endpointAddress,
+            String wsdlUrl,
+            String soapBinding,
+            String wsNamespace,
+            String wsName,
+            String epNamespace,
+            String epName,
+            String username,
+            String password,
+            List<String> classNames) {
         LOGGER.trace("new CXFClientInfo");
         this.sei = sei;
         this.endpointAddress = endpointAddress;
@@ -120,5 +168,34 @@ public class CXFClientInfo {
 
     public List<String> getInFaultInterceptors() {
         return inFaultInterceptors;
+    }
+
+    public CXFClientInfo addInterceptors(@Nullable CxfEndpointConfig cxfEndPointConfig) {
+        if (cxfEndPointConfig == null) {
+            return this;
+        }
+        if (cxfEndPointConfig.inInterceptors.isPresent()) {
+            this.inInterceptors.addAll(cxfEndPointConfig.inInterceptors.get());
+        }
+        if (cxfEndPointConfig.outInterceptors.isPresent()) {
+            this.outInterceptors.addAll(cxfEndPointConfig.outInterceptors.get());
+        }
+        if (cxfEndPointConfig.outFaultInterceptors.isPresent()) {
+            this.outFaultInterceptors.addAll(cxfEndPointConfig.outFaultInterceptors.get());
+        }
+        if (cxfEndPointConfig.inFaultInterceptors.isPresent()) {
+            this.inFaultInterceptors.addAll(cxfEndPointConfig.inFaultInterceptors.get());
+        }
+        return this;
+    }
+
+    public CXFClientInfo addFeatures(@Nullable CxfEndpointConfig cxfEndPointConfig) {
+        if (cxfEndPointConfig == null) {
+            return this;
+        }
+        if (cxfEndPointConfig.features.isPresent()) {
+            this.features.addAll(cxfEndPointConfig.features.get());
+        }
+        return this;
     }
 }

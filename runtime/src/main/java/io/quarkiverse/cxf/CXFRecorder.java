@@ -18,32 +18,54 @@ import io.vertx.ext.web.RoutingContext;
 public class CXFRecorder {
     private static final Logger LOGGER = Logger.getLogger(CXFRecorder.class);
 
-    public Supplier<CXFClientInfo> cxfClientInfoSupplier(String sei, CxfConfig cxfConfig,
-            String soapBinding, String wsNamespace, String wsName, List<String> classNames) {
+    /**
+     * Create CXFClientInfo supplier.
+     *
+     * @param sei
+     * @param cxfConfig
+     * @param soapBinding
+     * @param wsNamespace
+     * @param wsName
+     * @param classNames
+     * @return
+     */
+    public Supplier<CXFClientInfo> cxfClientInfoSupplier(
+            String sei,
+            CxfConfig cxfConfig,
+            String soapBinding,
+            String wsNamespace,
+            String wsName,
+            List<String> classNames) {
         LOGGER.trace("recorder CXFClientInfoSupplier");
         return () -> {
+            final String DEFAULT_EP_ADDR = "http://localhost:8080";
+
             // TODO if 2 clients with same SEI but different config it will failed but strange use case
             Map<String, CxfEndpointConfig> seiToCfg = new HashMap<>();
             Map<String, String> seiToPath = new HashMap<>();
-            for (Map.Entry<String, CxfEndpointConfig> webServicesByPath : cxfConfig.endpoints.entrySet()) {
-                CxfEndpointConfig cxfEndPointConfig = webServicesByPath.getValue();
-                String relativePath = webServicesByPath.getKey();
-                if (!cxfEndPointConfig.serviceInterface.isPresent()) {
+
+            for (Map.Entry<String, CxfEndpointConfig> kv : cxfConfig.endpoints.entrySet()) {
+                CxfEndpointConfig v = kv.getValue();
+                String k = kv.getKey();
+
+                // ignore if no service interface
+                if (!v.serviceInterface.isPresent()) {
                     continue;
                 }
-                String cfgSei = cxfEndPointConfig.serviceInterface.get();
-                seiToCfg.put(cfgSei, cxfEndPointConfig);
-                seiToPath.put(cfgSei, relativePath);
+
+                String cfgSei = v.serviceInterface.get();
+
+                seiToCfg.put(cfgSei, v);
+                seiToPath.put(cfgSei, k);
             }
 
             CxfEndpointConfig cxfEndPointConfig = seiToCfg.get(sei);
             String relativePath = seiToPath.get(sei);
 
-            String endpointAddress;
+            String endpointAddress = DEFAULT_EP_ADDR;
+
             if (cxfEndPointConfig != null) {
-                endpointAddress = cxfEndPointConfig.clientEndpointUrl.orElse("http://localhost:8080");
-            } else {
-                endpointAddress = "http://localhost:8080";
+                endpointAddress = cxfEndPointConfig.clientEndpointUrl.orElse(DEFAULT_EP_ADDR);
             }
             // default is sei name without package
             if (relativePath == null) {
@@ -61,39 +83,25 @@ public class CXFRecorder {
                         : endpointAddress + "/" + relativePath;
             }
 
-            CXFClientInfo cfg = new CXFClientInfo();
-            cfg.init(sei,
+            return new CXFClientInfo(
+                    sei,
                     endpointAddress,
-                    cxfEndPointConfig != null ? cxfEndPointConfig.wsdlPath.orElse(null) : null,
                     soapBinding,
                     wsNamespace,
                     wsName,
-                    cxfEndPointConfig != null ? cxfEndPointConfig.endpointNamespace.orElse(null) : null,
-                    cxfEndPointConfig != null ? cxfEndPointConfig.endpointName.orElse(null) : null,
-                    cxfEndPointConfig != null ? cxfEndPointConfig.username.orElse(null) : null,
-                    cxfEndPointConfig != null ? cxfEndPointConfig.password.orElse(null) : null,
-                    classNames);
-            if (cxfEndPointConfig != null && cxfEndPointConfig.inInterceptors.isPresent()) {
-                cfg.getInInterceptors().addAll(cxfEndPointConfig.inInterceptors.get());
-            }
-            if (cxfEndPointConfig != null && cxfEndPointConfig.outInterceptors.isPresent()) {
-                cfg.getOutInterceptors().addAll(cxfEndPointConfig.outInterceptors.get());
-            }
-            if (cxfEndPointConfig != null && cxfEndPointConfig.outFaultInterceptors.isPresent()) {
-                cfg.getOutFaultInterceptors().addAll(cxfEndPointConfig.outFaultInterceptors.get());
-            }
-            if (cxfEndPointConfig != null && cxfEndPointConfig.inFaultInterceptors.isPresent()) {
-                cfg.getInFaultInterceptors().addAll(cxfEndPointConfig.inFaultInterceptors.get());
-            }
-            if (cxfEndPointConfig != null && cxfEndPointConfig.features.isPresent()) {
-                cfg.getFeatures().addAll(cxfEndPointConfig.features.get());
-            }
-            return cfg;
+                    classNames,
+                    cxfEndPointConfig);
         };
     }
 
-    public void registerCXFServlet(RuntimeValue<CXFServletInfos> runtimeInfos, String path, String sei,
-            CxfConfig cxfConfig, String soapBinding, List<String> wrapperClassNames, String wsImplementor) {
+    public void registerCXFServlet(
+            RuntimeValue<CXFServletInfos> runtimeInfos,
+            String path,
+            String sei,
+            CxfConfig cxfConfig,
+            String soapBinding,
+            List<String> wrapperClassNames,
+            String wsImplementor) {
         CXFServletInfos infos = runtimeInfos.getValue();
         Map<String, CxfEndpointConfig> implementorToCfg = new HashMap<>();
         Map<String, String> implementorToPath = new HashMap<>();
@@ -117,7 +125,8 @@ public class CXFRecorder {
             relativePath = "/" + serviceName;
         }
         if (wsImplementor != null && !wsImplementor.equals("")) {
-            CXFServletInfo cfg = new CXFServletInfo(path,
+            CXFServletInfo cfg = new CXFServletInfo(
+                    path,
                     relativePath,
                     wsImplementor,
                     sei,
@@ -150,12 +159,16 @@ public class CXFRecorder {
         return new RuntimeValue<>(infos);
     }
 
-    public Handler<RoutingContext> initServer(RuntimeValue<CXFServletInfos> infos, BeanContainer beanContainer) {
+    public Handler<RoutingContext> initServer(
+            RuntimeValue<CXFServletInfos> infos,
+            BeanContainer beanContainer) {
         LOGGER.trace("init server");
         return new CxfHandler(infos.getValue(), beanContainer);
     }
 
-    public void setPath(RuntimeValue<CXFServletInfos> infos, String path) {
+    public void setPath(
+            RuntimeValue<CXFServletInfos> infos,
+            String path) {
         infos.getValue().setPath(path);
     }
 }
