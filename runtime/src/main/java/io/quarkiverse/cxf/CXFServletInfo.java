@@ -28,7 +28,6 @@ public class CXFServletInfo {
             CxfEndpointConfig cfg,
             String relativePath) {
         super();
-        LOGGER.trace("new CXFServletInfo");
         this.path = data.path;
         this.relativePath = relativePath;
         this.className = data.impl;
@@ -50,7 +49,6 @@ public class CXFServletInfo {
             List<String> wrapperClassNames,
             String endpointUrl) {
         super();
-        LOGGER.trace("new CXFServletInfo");
         this.path = path;
         this.relativePath = relativePath;
         this.className = className;

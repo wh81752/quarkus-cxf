@@ -179,20 +179,6 @@ public class CXFRecorder {
         }
     }
 
-    private void startRoute(
-            CXFServiceData data,
-            CXFServletInfos infos,
-            CxfEndpointConfig cxfEndPointConfig,
-            String relativePath) {
-        if (data.hasImpl()) {
-            LOGGER.trace("register CXF Servlet info");
-            infos.add(new CXFServletInfo(
-                    data,
-                    cxfEndPointConfig,
-                    relativePath));
-        }
-    }
-
     public RuntimeValue<CXFServletInfos> createInfos() {
         CXFServletInfos infos = new CXFServletInfos();
         return new RuntimeValue<>(infos);

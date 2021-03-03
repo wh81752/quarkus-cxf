@@ -11,13 +11,8 @@ import org.jboss.logging.Logger;
 public class CXFServletInfos {
     private static final Logger LOGGER = Logger.getLogger(CXFServletInfos.class);
 
-    private final List<CXFServletInfo> infos;
+    private final List<CXFServletInfo> infos = new ArrayList<>();
     private String path = null;
-
-    public CXFServletInfos() {
-        LOGGER.trace("new CXFServletInfos");
-        infos = new ArrayList<>();
-    }
 
     public Collection<CXFServletInfo> getInfos() {
         return infos;
@@ -48,14 +43,12 @@ public class CXFServletInfos {
             CXFRecorder.servletConfig cfg) {
         Objects.requireNonNull(cfg);
         if (data.hasImpl()) {
-            LOGGER.trace("register CXF Servlet info");
             this.add(new CXFServletInfo(data, cfg.config, cfg.path));
         }
     }
 
     public void startRoute(CXFServiceData data) {
         if (data.hasImpl()) {
-            LOGGER.trace("register CXF Servlet info");
             this.add(new CXFServletInfo(data, null, data.relativePath()));
         }
     }
