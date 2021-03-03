@@ -2,16 +2,16 @@ package io.quarkiverse.cxf;
 
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.List;
+import java.util.Objects;
 import java.util.stream.Collectors;
 
 import org.jboss.logging.Logger;
 
 public class CXFServletInfos {
+    private static final Logger LOGGER = Logger.getLogger(CXFServletInfos.class);
 
     private final List<CXFServletInfo> infos;
-    private static final Logger LOGGER = Logger.getLogger(CXFServletInfos.class);
     private String path = null;
 
     public CXFServletInfos() {
@@ -28,9 +28,10 @@ public class CXFServletInfos {
     }
 
     public List<String> getWrappersclasses() {
-        if (infos == null)
-            return Collections.emptyList();
-        return infos.stream().map(CXFServletInfo::getWrapperClassNames).flatMap(List::stream)
+        Objects.requireNonNull(this.infos);
+        return infos.stream()
+                .map(CXFServletInfo::getWrapperClassNames)
+                .flatMap(List::stream)
                 .collect(Collectors.toList());
     }
 
@@ -40,5 +41,22 @@ public class CXFServletInfos {
 
     public void setPath(String path) {
         this.path = path;
+    }
+
+    public void startRoute(
+            CXFServiceData data,
+            CXFRecorder.servletConfig cfg) {
+        Objects.requireNonNull(cfg);
+        if (data.hasImpl()) {
+            LOGGER.trace("register CXF Servlet info");
+            this.add(new CXFServletInfo(data, cfg.config, cfg.path));
+        }
+    }
+
+    public void startRoute(CXFServiceData data) {
+        if (data.hasImpl()) {
+            LOGGER.trace("register CXF Servlet info");
+            this.add(new CXFServletInfo(data, null, data.relativePath()));
+        }
     }
 }

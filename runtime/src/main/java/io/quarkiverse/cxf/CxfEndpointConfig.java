@@ -92,4 +92,24 @@ public class CxfEndpointConfig {
      */
     @ConfigItem
     public Optional<List<String>> inFaultInterceptors;
+
+    @Override
+    public String toString() {
+        return "CxfEndpointConfig{" +
+                "implementor=" + implementor +
+                ", wsdlPath=" + wsdlPath +
+                ", clientEndpointUrl=" + clientEndpointUrl +
+                ", publishedEndpointUrl=" + publishedEndpointUrl +
+                ", serviceInterface=" + serviceInterface +
+                ", endpointNamespace=" + endpointNamespace +
+                ", endpointName=" + endpointName +
+                ", username=" + username +
+                ", password=" + password +
+                ", features=" + features +
+                ", inInterceptors=" + inInterceptors +
+                ", outInterceptors=" + outInterceptors +
+                ", outFaultInterceptors=" + outFaultInterceptors +
+                ", inFaultInterceptors=" + inFaultInterceptors +
+                '}';
+    }
 }
