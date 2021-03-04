@@ -280,91 +280,20 @@ class QuarkusCxfProcessor {
             CxfBuildTimeConfig cxfBuildTimeConfig,
             CxfBuildProducer bp) {
         IndexView index = combinedIndexBuildItem.getIndex();
-        // Register package-infos for reflection
-        for (AnnotationInstance xmlNamespaceInstance : index.getAnnotations(XML_NAMESPACE)) {
-            bp.produceReflectiveClass(
-                    xmlNamespaceInstance.target().asClass().name().toString());
-        }
-
-        //TODO bad code it is set in loop but use outside...
-
-        for (AnnotationInstance annotation : index.getAnnotations(WEBSERVICE_ANNOTATION)) {
-            // skip @WebService not on class.
-            if (annotation.target().kind() != AnnotationTarget.Kind.CLASS) {
-                continue;
-            }
-
-            WebServiceCxf ws = new WebServiceCxf(annotation).withConfig(cxfBuildTimeConfig);
-
-            bp.produceReflectiveClass(ws.wsClass());
-            bp.unremovable(ws.wsClass());
-
-            List<String> wrapperClassNames = new ArrayList<>();
-
-            //
-            // skip if not an interface .. is this the right approach?
-            //
-            if (!ws.isInterface()) {
-                continue;
-            }
-
-            // Perhaps not correct -> wrapper classes are not known.
-            wsTest(bp, ws.sei);
-
-            Collection<ClassInfo> implementors = WebServiceCxf.implementorsOf(index, ws.sei);
-
-            //TODO add soap1.2 in config file
-            //if no implementor, it mean it is client
-            if (implementors == null || implementors.isEmpty()) {
-                // make new WebServiceCxf to keep things seperated from original.
-                WebServiceCxf client = new WebServiceCxf(ws);
-                client.path = cxfBuildTimeConfig.path;
-
-                String seiClientproducerClassName = client.sei + "CxfClientProducer";
-                generateCxfClientProducer(bp.generatedBeans, seiClientproducerClassName, client.sei);
-                bp.unremovable(seiClientproducerClassName);
-
-                AnnotationInstance webserviceClient = findWebServiceClientAnnotation(index, client.wsClass().name());
-                if (webserviceClient != null) {
-                    client.wsName = webserviceClient.value("name").asString();
-                    client.wsNamespace = webserviceClient.value("targetNamespace").asString();
-                }
-                bp.produceWebService(client);
-            } else {
-                implementors
-                        .stream()
-                        .map(wsClass -> new WebServiceCxf(ws)
-                                .withImplementor(wsClass)
-                                .withBinding(wsClass.classAnnotation(BINDING_TYPE_ANNOTATION)))
-                        .forEach(bp::produceWebService);
-                bp.produceWebService(ws);
-            }
-
-            bp.produceProxies(
-                    ws.wsClass().name().toString(),
-                    "javax.xml.ws.BindingProvider",
-                    "java.io.Closeable",
-                    "org.apache.cxf.endpoint.Client");
-
-            //
-            // Produce reflective classes for all annotaded classes
-            //
-            ws.wsClass()
-                    .methods()
-                    .stream()
-                    .map((MethodInfo mi) -> asList(
-                            mi.annotation(REQUEST_WRAPPER_ANNOTATION),
-                            mi.annotation(RESPONSE_WRAPPER_ANNOTATION)))
-                    .flatMap(Collection::stream)
-                    .filter(Objects::nonNull)
-                    .map(ai -> ai.value("className"))
-                    .forEach(bp::produceReflectiveClass);
-        }
 
         //
         // The provided feature.
         //
         bp.produceFeature();
+
+        // Register package-infos for reflection
+        index.getAnnotations(XML_NAMESPACE)
+                .stream()
+                .map(AnnotationInstance::target)
+                .map(AnnotationTarget::asClass)
+                .map(ClassInfo::name)
+                .map(DotName::toString)
+                .forEach(bp::produceReflectiveClass);
 
         //
         // produce reflective classes out of all known subclasses.
@@ -373,17 +302,93 @@ class QuarkusCxfProcessor {
                 .map(index::getAllKnownSubclasses)
                 .flatMap(Collection::stream)
                 .forEach(bp::produceReflectiveClass);
+
+        //TODO bad code it is set in loop but use outside...
+
+        index.getAnnotations(WEBSERVICE_ANNOTATION)
+                .stream()
+                .filter(it -> it.target().kind() == AnnotationTarget.Kind.CLASS)
+                .map(annotation -> {
+                    return new WebServiceCxf(annotation).withConfig(cxfBuildTimeConfig);
+                })
+                .map(ws -> {
+                    bp.produceReflectiveClass(ws.wsClass());
+                    bp.unremovable(ws.wsClass());
+                    return ws;
+                })
+                .filter(WebServiceCxf::isInterface)
+                .map(ws -> {
+
+                    bp.produceProxies(
+                            ws.wsClass().name().toString(),
+                            "javax.xml.ws.BindingProvider",
+                            "java.io.Closeable",
+                            "org.apache.cxf.endpoint.Client");
+
+                    //
+                    // Produce reflective classes for all annotaded classes
+                    //
+                    ws.wsClass()
+                            .methods()
+                            .stream()
+                            .map((MethodInfo mi) -> asList(
+                                    mi.annotation(REQUEST_WRAPPER_ANNOTATION),
+                                    mi.annotation(RESPONSE_WRAPPER_ANNOTATION)))
+                            .flatMap(Collection::stream)
+                            .filter(Objects::nonNull)
+                            .map(ai -> ai.value("className"))
+                            .forEach(bp::produceReflectiveClass);
+
+                    return ws;
+                })
+                .forEach(ws -> {
+                    List<String> wrapperClassNames = new ArrayList<>();
+
+                    // Perhaps not correct -> wrapper classes are not known.
+                    wsTest(bp, ws.sei);
+
+                    Collection<ClassInfo> implementors = WebServiceCxf.implementorsOf(index, ws.sei);
+
+                    //TODO add soap1.2 in config file
+                    //if no implementor, it mean it is client
+                    if (implementors == null || implementors.isEmpty()) {
+                        // make new WebServiceCxf to keep things seperated from original.
+                        WebServiceCxf client = new WebServiceCxf(ws);
+                        client.path = cxfBuildTimeConfig.path;
+
+                        String seiClientproducerClassName = client.sei + "CxfClientProducer";
+                        generateCxfClientProducer(bp.generatedBeans, seiClientproducerClassName, client.sei);
+                        bp.unremovable(seiClientproducerClassName);
+
+                        AnnotationInstance webserviceClient = findWebServiceClientAnnotation(
+                                index,
+                                client.wsClass().name());
+                        if (webserviceClient != null) {
+                            client.wsName = webserviceClient.value("name").asString();
+                            client.wsNamespace = webserviceClient.value("targetNamespace").asString();
+                        }
+                        bp.produceWebService(client);
+                    } else {
+                        implementors
+                                .stream()
+                                .map(wsClass -> new WebServiceCxf(ws)
+                                        .withImplementor(wsClass)
+                                        .withBinding(wsClass.classAnnotation(BINDING_TYPE_ANNOTATION)))
+                                .forEach(bp::produceWebService);
+                        bp.produceWebService(ws);
+                    }
+                });
     }
 
     @BuildStep
     @Record(ExecutionTime.RUNTIME_INIT)
     public void startRoute(
             CXFRecorder recorder,
+            CxfConfig cxfConfig,
             BuildProducer<DefaultRouteBuildItem> defaultRoutes,
             BuildProducer<RouteBuildItem> routes,
             BeanContainerBuildItem beanContainer,
-            List<CxfWebServiceBuildItem> cxfWebServices,
-            CxfConfig cxfConfig) {
+            List<CxfWebServiceBuildItem> cxfWebServices) {
         String path = null;
         boolean startRoute = false;
 
