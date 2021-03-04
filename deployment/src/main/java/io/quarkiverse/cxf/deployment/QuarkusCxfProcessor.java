@@ -188,6 +188,7 @@ class QuarkusCxfProcessor {
         public WebServiceCxf(WebServiceCxf ws) {
             Objects.requireNonNull(ws);
             this.impl = ws.impl;
+            this.path = ws.path;
             this.sei = ws.sei;
             this.soapBinding = ws.soapBinding;
             this.wrapperClassNames.addAll(ws.wrapperClassNames);
@@ -200,6 +201,12 @@ class QuarkusCxfProcessor {
             if (ai != null) {
                 this.soapBinding = ai.value().asString();
             }
+            return this;
+        }
+
+        public WebServiceCxf withConfig(CxfBuildTimeConfig config) {
+            Objects.requireNonNull(config);
+            this.path = ofNullable(config.path).orElse("/");
             return this;
         }
 
@@ -287,7 +294,7 @@ class QuarkusCxfProcessor {
                 continue;
             }
 
-            WebServiceCxf ws = new WebServiceCxf(annotation);
+            WebServiceCxf ws = new WebServiceCxf(annotation).withConfig(cxfBuildTimeConfig);
 
             bp.produceReflectiveClass(ws.wsClass());
             bp.unremovable(ws.wsClass());
@@ -324,20 +331,13 @@ class QuarkusCxfProcessor {
                 }
                 bp.produceWebService(client);
             } else {
-
-                for (ClassInfo wsClass : implementors) {
-                    WebServiceCxf impl;
-
-                    impl = new WebServiceCxf(ws)
-                            .withImplementor(wsClass)
-                            .withBinding(wsClass.classAnnotation(BINDING_TYPE_ANNOTATION));
-                    bp.produceWebService(impl);
-
-                }
-
-                WebServiceCxf sei = new WebServiceCxf(ws);
-                sei.path = cxfBuildTimeConfig.path;
-                bp.produceWebService(sei);
+                implementors
+                        .stream()
+                        .map(wsClass -> new WebServiceCxf(ws)
+                                .withImplementor(wsClass)
+                                .withBinding(wsClass.classAnnotation(BINDING_TYPE_ANNOTATION)))
+                        .forEach(bp::produceWebService);
+                bp.produceWebService(ws);
             }
 
             bp.produceProxies(
