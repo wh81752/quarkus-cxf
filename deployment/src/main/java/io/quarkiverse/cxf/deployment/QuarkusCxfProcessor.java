@@ -414,20 +414,6 @@ class QuarkusCxfProcessor {
             LOGGER.debug("no webservices defined, not setting up servlet.");
             return;
         }
-
-        infos = recorder.createInfos();
-
-        //
-        // register servlets in recorder.
-        //
-        services.forEach(service -> {
-            recorder.registerCXFServlet(
-                    infos,
-                    cxfConfig,
-                    service);
-
-        });
-
         String path;
 
         path = services.stream()
@@ -440,12 +426,24 @@ class QuarkusCxfProcessor {
             throw new IllegalStateException("path is not defined.");
         }
 
+        infos = recorder.createInfos(path);
+
+        //
+        // register servlets in recorder.
+        //
+        services.forEach(service -> {
+            recorder.registerCXFServlet(
+                    infos,
+                    cxfConfig,
+                    service);
+
+        });
+
         String route;
         RouteBuildItem routeBuildItem;
         Handler<RoutingContext> handler;
 
         handler = recorder.initServer(infos, beanContainer.getValue());
-        recorder.setPath(infos, path);
         route = getMappingPath(path);
         routeBuildItem = builder()
                 .route(route)
@@ -453,7 +451,6 @@ class QuarkusCxfProcessor {
                 .handlerType(HandlerType.BLOCKING)
                 .build();
         routes.produce(routeBuildItem);
-
     }
 
     @BuildStep

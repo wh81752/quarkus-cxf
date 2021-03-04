@@ -28,8 +28,6 @@ public class CXFRecorder {
      * Create CXFClientInfo supplier.
      * <p>
      * This method is called once per @WebService *interface*.
-     * <p>
-     * Modify it to get it called once per Implementation class.
      */
     public Supplier<CXFClientInfo> cxfClientInfoSupplier(
             String sei,
@@ -125,7 +123,7 @@ public class CXFRecorder {
         this.registerCXFServlet(runtimeInfos.getValue(), cxfConfig, data);
     }
 
-    public void registerCXFServlet(
+    private void registerCXFServlet(
             CXFServletInfos infos,
             CxfConfig cxfConfig,
             CXFServiceData data) {
@@ -179,8 +177,8 @@ public class CXFRecorder {
         }
     }
 
-    public RuntimeValue<CXFServletInfos> createInfos() {
-        CXFServletInfos infos = new CXFServletInfos();
+    public RuntimeValue<CXFServletInfos> createInfos(String path) {
+        CXFServletInfos infos = new CXFServletInfos(path);
         return new RuntimeValue<>(infos);
     }
 
@@ -191,9 +189,4 @@ public class CXFRecorder {
         return new CxfHandler(infos.getValue(), beanContainer);
     }
 
-    public void setPath(
-            RuntimeValue<CXFServletInfos> infos,
-            String path) {
-        infos.getValue().setPath(path);
-    }
 }

@@ -45,6 +45,9 @@ import io.vertx.core.http.HttpServerRequest;
 import io.vertx.core.http.HttpServerResponse;
 import io.vertx.ext.web.RoutingContext;
 
+/**
+ * CxfHandler handling a VERTX routing event by invoking appropriate CXF servlet handler.
+ */
 public class CxfHandler implements Handler<RoutingContext> {
     private static final Logger LOGGER = Logger.getLogger(CxfHandler.class);
     private static final String ALLOWED_METHODS = "POST, GET, PUT, DELETE, HEAD, OPTIONS, TRACE";
@@ -101,7 +104,9 @@ public class CxfHandler implements Handler<RoutingContext> {
         serviceListGeneratorServlet.init(servletConfig);
         this.controller = new ServletController(destinationRegistry, servletConfig, serviceListGeneratorServlet);
         serviceListGeneratorServlet.init(new VertxServletConfig());
+
         servletPath = cxfServletInfos.getPath();
+
         for (CXFServletInfo servletInfo : cxfServletInfos.getInfos()) {
             JaxWsServerFactoryBean factory = new JaxWsServerFactoryBean(
                     new QuarkusJaxWsServiceFactoryBean(cxfServletInfos.getWrappersclasses()));

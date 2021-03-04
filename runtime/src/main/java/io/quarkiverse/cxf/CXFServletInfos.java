@@ -12,7 +12,12 @@ public class CXFServletInfos {
     private static final Logger LOGGER = Logger.getLogger(CXFServletInfos.class);
 
     private final List<CXFServletInfo> infos = new ArrayList<>();
-    private String path = null;
+    private final String path;
+
+    public CXFServletInfos(String path) {
+        Objects.requireNonNull(path);
+        this.path = path;
+    }
 
     public Collection<CXFServletInfo> getInfos() {
         return infos;
@@ -32,10 +37,6 @@ public class CXFServletInfos {
 
     public void add(CXFServletInfo cfg) {
         infos.add(cfg);
-    }
-
-    public void setPath(String path) {
-        this.path = path;
     }
 
     public void startRoute(
