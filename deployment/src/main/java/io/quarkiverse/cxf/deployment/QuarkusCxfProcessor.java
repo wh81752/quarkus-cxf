@@ -1,6 +1,7 @@
 package io.quarkiverse.cxf.deployment;
 
 import static java.util.Arrays.asList;
+import static java.util.Optional.ofNullable;
 
 import java.io.BufferedReader;
 import java.io.IOException;
@@ -24,6 +25,7 @@ import org.apache.cxf.bus.extension.ExtensionManagerImpl;
 import org.apache.cxf.common.spi.GeneratedClassClassLoaderCapture;
 import org.jboss.jandex.*;
 import org.jboss.logging.Logger;
+import org.wildfly.common.annotation.Nullable;
 
 import io.quarkiverse.cxf.*;
 import io.quarkus.arc.deployment.*;
@@ -51,7 +53,7 @@ import io.vertx.ext.web.RoutingContext;
 
 class QuarkusCxfProcessor {
 
-    private static final String FEATURE_CXF = "cxf";
+    public static final String FEATURE_CXF = "cxf";
     private static final DotName WEBSERVICE_ANNOTATION = DotName.createSimple("javax.jws.WebService");
     private static final DotName WEBSERVICE_CLIENT = DotName.createSimple("javax.xml.ws.WebServiceClient");
     private static final DotName REQUEST_WRAPPER_ANNOTATION = DotName.createSimple("javax.xml.ws.RequestWrapper");
@@ -112,61 +114,6 @@ class QuarkusCxfProcessor {
         }
     }
 
-    private static class CxfBuildProducer {
-        BuildProducer<FeatureBuildItem> feature;
-        BuildProducer<ReflectiveClassBuildItem> reflectiveClass;
-        BuildProducer<NativeImageProxyDefinitionBuildItem> proxies;
-        BuildProducer<GeneratedBeanBuildItem> generatedBeans;
-        BuildProducer<CxfWebServiceBuildItem> cxfWebServices;
-        BuildProducer<AdditionalBeanBuildItem> additionalBeans;
-        BuildProducer<UnremovableBeanBuildItem> unremovableBeans;
-
-        public CxfBuildProducer produce(ReflectiveClassBuildItem item) {
-            this.reflectiveClass.produce(item);
-            return this;
-        }
-
-        public CxfBuildProducer produceReflectiveClass(String clname) {
-            return this.produce(new ReflectiveClassBuildItem(true, true, clname));
-        }
-
-        public CxfBuildProducer produceReflectiveClass(AnnotationValue clname) {
-            return this.produceReflectiveClass(clname.asString());
-        }
-
-        public CxfBuildProducer produceReflectiveClass(ClassInfo clname) {
-            return this.produceReflectiveClass(clname.name().toString());
-        }
-
-        public CxfBuildProducer produce(CxfWebServiceBuildItem item) {
-            this.cxfWebServices.produce(item);
-            return this;
-        }
-
-        public CxfBuildProducer unremovable(String clname) {
-            return unremovable(new UnremovableBeanBuildItem.BeanClassNameExclusion(clname));
-        }
-
-        public CxfBuildProducer unremovable(ClassInfo clname) {
-            return unremovable(clname.name().toString());
-        }
-
-        public CxfBuildProducer unremovable(UnremovableBeanBuildItem.BeanClassNameExclusion clname) {
-            this.unremovableBeans.produce(new UnremovableBeanBuildItem(clname));
-            return this;
-        }
-
-        public CxfBuildProducer produceProxies(String... items) {
-            this.proxies.produce(new NativeImageProxyDefinitionBuildItem(items));
-            return this;
-        }
-
-        public CxfBuildProducer produceFeature() {
-            this.feature.produce(new FeatureBuildItem(FEATURE_CXF));
-            return this;
-        }
-    }
-
     @BuildStep
     public void build(
             CombinedIndexBuildItem combinedIndexBuildItem,
@@ -209,6 +156,117 @@ class QuarkusCxfProcessor {
         }
     }
 
+    /**
+     * WebServiceCxf - represents a WebService.
+     * <p>
+     * Each WebServiceCxf instance represents a WebService by summarizing up information like implementor classs, SOAP
+     * binding, namespaces and the like.
+     */
+    public static class WebServiceCxf {
+        public final List<String> wrapperClassNames = new ArrayList<>();
+        public final AnnotationInstance ws;
+        public String impl;
+        public String path;
+        public String sei;
+        public String soapBinding = SOAPBinding.SOAP11HTTP_BINDING;
+        public String wsName;
+        public String wsNamespace;
+
+        public WebServiceCxf(AnnotationInstance ws) {
+            Objects.requireNonNull(ws);
+            this.ws = ws;
+            // Derive SEI's name from annotated class. You can override later once you
+            // know better who the SEI really is.
+            this.sei = this.wsClass().name().toString();
+            // Derive service name and namespace from given annotation class. Override
+            // if you know better.
+            this.wsName = this.wsName();
+            this.wsNamespace = this.wsNamespace();
+        }
+
+        public WebServiceCxf(WebServiceCxf ws) {
+            Objects.requireNonNull(ws);
+            this.impl = ws.impl;
+            this.sei = ws.sei;
+            this.soapBinding = ws.soapBinding;
+            this.wrapperClassNames.addAll(ws.wrapperClassNames);
+            this.ws = ws.ws;
+            this.wsName = ws.wsName;
+            this.wsNamespace = ws.wsNamespace;
+        }
+
+        public WebServiceCxf withBinding(@Nullable AnnotationInstance ai) {
+            if (ai != null) {
+                this.soapBinding = ai.value().asString();
+            }
+            return this;
+        }
+
+        public WebServiceCxf withImplementor(ClassInfo wsClass) {
+            this.impl = wsClass.name().toString();
+            this.wsName = this.impl;
+
+            if (this.impl.contains(".")) {
+                this.wsName = this.impl.substring(this.impl.lastIndexOf('.') + 1);
+            }
+            return this;
+        }
+
+        public boolean isInterface() {
+            return Modifier.isInterface(wsClass().flags());
+        }
+
+        public boolean hasImpl() {
+            return impl != null && !impl.isEmpty();
+        }
+
+        public static String packageOf(ClassInfo clazz) {
+            String pkg = clazz.name().toString();
+            int idx = pkg.lastIndexOf('.');
+            if (idx != -1 && idx < pkg.length() - 1) {
+                pkg = pkg.substring(0, idx);
+            }
+            return pkg;
+        }
+
+        public ClassInfo wsClass() {
+            return this.ws.target().asClass();
+        }
+
+        public String wsPackage() {
+            return packageOf(this.wsClass());
+        }
+
+        public String wsName() {
+            return ofNullable(wsName(this.ws)).orElse("");
+        }
+
+        public String wsNamespace() {
+            return ofNullable(wsNamespace(this.ws)).orElseGet(() -> getNamespaceFromPackage(
+                    this.wsPackage()));
+        }
+
+        public static Collection<ClassInfo> implementorsOf(
+                IndexView index,
+                String clazz) {
+            return index.getAllKnownImplementors(DotName.createSimple(clazz));
+        }
+
+        public static @Nullable String val(
+                AnnotationInstance ai,
+                String name) {
+            return ai.value(name) != null ? ai.value(name).asString() : null;
+        }
+
+        public static @Nullable String wsName(AnnotationInstance ai) {
+            return val(ai, "serviceName");
+        }
+
+        public static @Nullable String wsNamespace(AnnotationInstance ai) {
+            return val(ai, "targetNamespace");
+        }
+    }
+
     private void _build(
             CombinedIndexBuildItem combinedIndexBuildItem,
             CxfBuildTimeConfig cxfBuildTimeConfig,
@@ -228,97 +286,59 @@ class QuarkusCxfProcessor {
                 continue;
             }
 
-            ClassInfo wsClassInfo = annotation.target().asClass();
-            bp.produceReflectiveClass(wsClassInfo);
-            bp.unremovable(wsClassInfo);
+            WebServiceCxf ws = new WebServiceCxf(annotation);
 
-            //String sei = wsClassInfo.name().toString();
+            bp.produceReflectiveClass(ws.wsClass());
+            bp.unremovable(ws.wsClass());
 
             List<String> wrapperClassNames = new ArrayList<>();
 
             //
-            // skip if not an interface .. is this correct?
+            // skip if not an interface .. is this the right approach?
             //
-            if (!Modifier.isInterface(wsClassInfo.flags())) {
+            if (!ws.isInterface()) {
                 continue;
             }
 
-            //
-            // SEI - Service Endpoint Interface
-            //
-            String sei = wsClassInfo.name().toString();
-
             // Perhaps not correct -> wrapper classes are not known.
-            wsTest(bp, sei);
+            wsTest(bp, ws.sei);
 
-            String pkg = wsClassInfo.name().toString();
-            wsClassInfo.name().prefix().toString();
-            int idx = pkg.lastIndexOf('.');
-            if (idx != -1 && idx < pkg.length() - 1) {
-                pkg = pkg.substring(0, idx);
-            }
-            AnnotationValue namespaceVal = annotation.value("targetNamespace");
-            String wsNamespace = namespaceVal != null ? namespaceVal.asString() : getNamespaceFromPackage(pkg);
-            String wsName = "";
-            if (annotation.value("serviceName") != null) {
-                wsName = annotation.value("serviceName").asString();
-            }
-            Collection<ClassInfo> implementors = index.getAllKnownImplementors(DotName.createSimple(sei));
+            Collection<ClassInfo> implementors = WebServiceCxf.implementorsOf(index, ws.sei);
 
             //TODO add soap1.2 in config file
-            String soapBinding = SOAPBinding.SOAP11HTTP_BINDING;
             //if no implementor, it mean it is client
             if (implementors == null || implementors.isEmpty()) {
-                String seiClientproducerClassName = sei + "CxfClientProducer";
-                generateCxfClientProducer(bp.generatedBeans, seiClientproducerClassName, sei);
+                // make new WebServiceCxf to keep things seperated from original.
+                WebServiceCxf client = new WebServiceCxf(ws);
+                client.path = cxfBuildTimeConfig.path;
+
+                String seiClientproducerClassName = client.sei + "CxfClientProducer";
+                generateCxfClientProducer(bp.generatedBeans, seiClientproducerClassName, client.sei);
                 bp.unremovable(seiClientproducerClassName);
 
-                AnnotationInstance webserviceClient = findWebServiceClientAnnotation(index, wsClassInfo.name());
+                AnnotationInstance webserviceClient = findWebServiceClientAnnotation(index, client.wsClass().name());
                 if (webserviceClient != null) {
-                    wsName = webserviceClient.value("name").asString();
-                    wsNamespace = webserviceClient.value("targetNamespace").asString();
+                    client.wsName = webserviceClient.value("name").asString();
+                    client.wsNamespace = webserviceClient.value("targetNamespace").asString();
                 }
-                bp.cxfWebServices.produce(new CxfWebServiceBuildItem(
-                        cxfBuildTimeConfig.path,
-                        sei,
-                        soapBinding,
-                        wsNamespace,
-                        wsName,
-                        wrapperClassNames));
+                bp.produceWebService(client);
             } else {
 
                 for (ClassInfo wsClass : implementors) {
-                    String implementor = wsClass.name().toString();
-                    if (implementor.contains(".")) {
-                        wsName = implementor.substring(implementor.lastIndexOf('.') + 1);
-                    } else {
-                        wsName = implementor;
-                    }
-                    bp.additionalBeans.produce(AdditionalBeanBuildItem.unremovableOf(implementor));
-                    AnnotationInstance bindingType = wsClass.classAnnotation(BINDING_TYPE_ANNOTATION);
-                    if (bindingType != null) {
-                        soapBinding = bindingType.value().asString();
-                    }
-                    bp.produce(new CxfWebServiceBuildItem(
-                            cxfBuildTimeConfig.path,
-                            sei,
-                            soapBinding,
-                            wsNamespace,
-                            wsName,
-                            wrapperClassNames,
-                            implementor));
+                    WebServiceCxf impl = new WebServiceCxf(ws).withImplementor(wsClass)
+                            .withBinding(wsClass.classAnnotation(
+                                    BINDING_TYPE_ANNOTATION));
+                    bp.produceWebService(impl);
+
                 }
-                bp.produce(new CxfWebServiceBuildItem(
-                        cxfBuildTimeConfig.path,
-                        sei,
-                        soapBinding,
-                        wsNamespace,
-                        wsName,
-                        wrapperClassNames));
+
+                WebServiceCxf sei = new WebServiceCxf(ws);
+                sei.path = cxfBuildTimeConfig.path;
+                bp.produceWebService(sei);
             }
 
             bp.produceProxies(
-                    wsClassInfo.name().toString(),
+                    ws.wsClass().name().toString(),
                     "javax.xml.ws.BindingProvider",
                     "java.io.Closeable",
                     "org.apache.cxf.endpoint.Client");
@@ -326,7 +346,7 @@ class QuarkusCxfProcessor {
             //
             // Produce reflective classes for all annotaded classes
             //
-            wsClassInfo
+            ws.wsClass()
                     .methods()
                     .stream()
                     .map((MethodInfo mi) -> asList(
@@ -1116,7 +1136,7 @@ class QuarkusCxfProcessor {
         return mappingPath;
     }
 
-    private String getNamespaceFromPackage(String pkg) {
+    static public String getNamespaceFromPackage(String pkg) {
         //TODO XRootElement then XmlSchema then derived of package
         String[] strs = pkg.split("\\.");
         StringBuilder b = new StringBuilder("http://");
