@@ -74,4 +74,12 @@ public final class CxfWebServiceBuildItem extends MultiBuildItem {
     public boolean IsClient() {
         return isClient;
     }
+
+    public boolean IsService() {
+        return !this.IsClient();
+    }
+
+    public boolean hasImplementor() {
+        return this.implementor != null && !this.implementor.isEmpty();
+    }
 }

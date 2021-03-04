@@ -1,5 +1,6 @@
 package io.quarkiverse.cxf.deployment;
 
+import static io.quarkus.vertx.http.deployment.RouteBuildItem.builder;
 import static java.util.Arrays.asList;
 import static java.util.Optional.ofNullable;
 
@@ -45,7 +46,6 @@ import io.quarkus.deployment.builditem.nativeimage.ReflectiveClassBuildItem;
 import io.quarkus.deployment.builditem.nativeimage.RuntimeInitializedClassBuildItem;
 import io.quarkus.gizmo.*;
 import io.quarkus.runtime.RuntimeValue;
-import io.quarkus.vertx.http.deployment.DefaultRouteBuildItem;
 import io.quarkus.vertx.http.deployment.RouteBuildItem;
 import io.quarkus.vertx.http.runtime.HandlerType;
 import io.vertx.core.Handler;
@@ -380,61 +380,80 @@ class QuarkusCxfProcessor {
                 });
     }
 
+    /**
+     * This build step produces two items: o DefaultRouteBuildItem ; and o RouteBuildItem
+     */
     @BuildStep
     @Record(ExecutionTime.RUNTIME_INIT)
     public void startRoute(
             CXFRecorder recorder,
             CxfConfig cxfConfig,
-            BuildProducer<DefaultRouteBuildItem> defaultRoutes,
-            BuildProducer<RouteBuildItem> routes,
             BeanContainerBuildItem beanContainer,
-            List<CxfWebServiceBuildItem> cxfWebServices) {
-        String path = null;
-        boolean startRoute = false;
+            List<CxfWebServiceBuildItem> cxfWebServices,
+            //BuildProducer<DefaultRouteBuildItem> defaultRoutes,
+            BuildProducer<RouteBuildItem> routes) {
+        List<CXFServiceData> services;
+        RuntimeValue<CXFServletInfos> infos;
+
+        services = cxfWebServices
+                .stream()
+                .filter(ws -> ws.IsService() && ws.hasImplementor())
+                .map(ws -> {
+                    CXFServiceData data = new CXFServiceData();
+                    data.impl = ws.getImplementor();
+                    data.path = ws.getPath();
+                    data.sei = ws.getSei();
+                    data.binding = ws.getSoapBinding();
+                    data.clnames = ws.getClassNames();
+                    return data;
+                })
+                .collect(Collectors.toList());
 
         // nothing to do.
-        if (cxfWebServices.isEmpty()) {
+        if (services.isEmpty()) {
+            LOGGER.debug("no webservices defined, not setting up servlet.");
             return;
         }
 
-        RuntimeValue<CXFServletInfos> infos = recorder.createInfos();
+        infos = recorder.createInfos();
 
-        for (CxfWebServiceBuildItem cxfWebService : cxfWebServices) {
-            if (cxfWebService.IsClient()) {
-                continue;
-            }
-
-            CXFServiceData data = new CXFServiceData();
-            data.impl = cxfWebService.getImplementor();
-            data.path = cxfWebService.getPath();
-            data.sei = cxfWebService.getSei();
-            data.binding = cxfWebService.getSoapBinding();
-            data.clnames = cxfWebService.getClassNames();
-
+        //
+        // register servlets in recorder.
+        //
+        services.forEach(service -> {
             recorder.registerCXFServlet(
                     infos,
                     cxfConfig,
-                    data);
-            if (cxfWebService.getImplementor() != null && !cxfWebService.getImplementor().isEmpty()) {
-                startRoute = true;
-            }
-            if (path == null) {
-                path = cxfWebService.getPath();
-                recorder.setPath(infos, path);
-            }
+                    service);
+
+        });
+
+        String path;
+
+        path = services.stream()
+                .map(service -> service.path)
+                .filter(Objects::nonNull)
+                .filter(it -> !it.isEmpty()).findAny()
+                .orElse(null);
+
+        if (path == null) {
+            throw new IllegalStateException("path is not defined.");
         }
 
-        if (startRoute) {
-            Handler<RoutingContext> handler = recorder.initServer(infos, beanContainer.getValue());
-            if (path != null) {
-                routes.produce(RouteBuildItem.builder()
-                        .route(getMappingPath(path))
-                        .handler(handler)
-                        .handlerType(HandlerType.BLOCKING)
-                        .build());
+        String route;
+        RouteBuildItem routeBuildItem;
+        Handler<RoutingContext> handler;
 
-            }
-        }
+        handler = recorder.initServer(infos, beanContainer.getValue());
+        recorder.setPath(infos, path);
+        route = getMappingPath(path);
+        routeBuildItem = builder()
+                .route(route)
+                .handler(handler)
+                .handlerType(HandlerType.BLOCKING)
+                .build();
+        routes.produce(routeBuildItem);
+
     }
 
     @BuildStep
