@@ -178,6 +178,7 @@ class QuarkusCxfProcessor {
             // Derive SEI's name from annotated class. You can override later once you
             // know better who the SEI really is.
             this.sei = this.wsClass().name().toString();
+            this.path = this.sei.toLowerCase();
             // Derive service name and namespace from given annotation class. Override
             // if you know better.
             this.wsName = this.wsName();
@@ -325,9 +326,11 @@ class QuarkusCxfProcessor {
             } else {
 
                 for (ClassInfo wsClass : implementors) {
-                    WebServiceCxf impl = new WebServiceCxf(ws).withImplementor(wsClass)
-                            .withBinding(wsClass.classAnnotation(
-                                    BINDING_TYPE_ANNOTATION));
+                    WebServiceCxf impl;
+
+                    impl = new WebServiceCxf(ws)
+                            .withImplementor(wsClass)
+                            .withBinding(wsClass.classAnnotation(BINDING_TYPE_ANNOTATION));
                     bp.produceWebService(impl);
 
                 }
