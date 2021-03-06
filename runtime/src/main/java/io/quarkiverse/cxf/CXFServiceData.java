@@ -1,5 +1,6 @@
 package io.quarkiverse.cxf;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 
@@ -12,11 +13,13 @@ import java.util.Objects;
  * @author geronimo1
  */
 public class CXFServiceData {
-    public String sei;
-    public String path;
-    public String impl;
+    public List<String> clnames = new ArrayList<>();
     public String binding;
-    public List<String> clnames;
+    public String impl;
+    public String path;
+    public String sei;
+    public String wsName;
+    public String wsNamespace;
 
     public boolean hasImpl() {
         return this.impl != null && !this.impl.equals("");

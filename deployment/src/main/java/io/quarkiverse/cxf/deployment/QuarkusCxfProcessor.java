@@ -45,7 +45,6 @@ import io.quarkus.deployment.builditem.nativeimage.NativeImageResourceBuildItem;
 import io.quarkus.deployment.builditem.nativeimage.ReflectiveClassBuildItem;
 import io.quarkus.deployment.builditem.nativeimage.RuntimeInitializedClassBuildItem;
 import io.quarkus.gizmo.*;
-import io.quarkus.runtime.RuntimeValue;
 import io.quarkus.vertx.http.deployment.RouteBuildItem;
 import io.quarkus.vertx.http.runtime.HandlerType;
 import io.vertx.core.Handler;
@@ -393,7 +392,10 @@ class QuarkusCxfProcessor {
             //BuildProducer<DefaultRouteBuildItem> defaultRoutes,
             BuildProducer<RouteBuildItem> routes) {
         List<CXFServiceData> services;
-        RuntimeValue<CXFServletInfos> infos;
+
+        //
+        // Prepare my webservices.
+        //
 
         services = cxfWebServices
                 .stream()
@@ -409,11 +411,18 @@ class QuarkusCxfProcessor {
                 })
                 .collect(Collectors.toList());
 
-        // nothing to do.
+        //
+        // Bail out if nothing to do.
+        //
+
         if (services.isEmpty()) {
             LOGGER.debug("no webservices defined, not setting up servlet.");
             return;
         }
+
+        //
+        // Mysterious: Get a Servlet path.
+        //
         String path;
 
         path = services.stream()
@@ -426,33 +435,25 @@ class QuarkusCxfProcessor {
             throw new IllegalStateException("path is not defined.");
         }
 
-        infos = recorder.createInfos(path);
-
         //
-        // register servlets in recorder.
+        // Create a VERTX handler for CXF services and mount it at route.
         //
-        services.forEach(service -> {
-            recorder.registerCXFServlet(
-                    infos,
-                    cxfConfig,
-                    service);
 
-        });
-
-        String route;
-        RouteBuildItem routeBuildItem;
+        RouteBuildItem route;
         Handler<RoutingContext> handler;
 
-        handler = recorder.initServer(infos, beanContainer.getValue());
-        route = getMappingPath(path);
-        routeBuildItem = builder()
-                .route(route)
+        handler = recorder.registerServlet(path, cxfConfig, beanContainer.getValue(), services);
+        route = builder()
+                .route(getMappingPath(path))
                 .handler(handler)
                 .handlerType(HandlerType.BLOCKING)
                 .build();
-        routes.produce(routeBuildItem);
+        routes.produce(route);
     }
 
+    /**
+     * Build step producing client beans.
+     */
     @BuildStep
     @Record(ExecutionTime.RUNTIME_INIT)
     public void startClient(
@@ -460,22 +461,27 @@ class QuarkusCxfProcessor {
             CxfConfig cxfConfig,
             List<CxfWebServiceBuildItem> cxfWebServices,
             BuildProducer<SyntheticBeanBuildItem> synthetics) {
-        for (CxfWebServiceBuildItem cxfWebService : cxfWebServices) {
-            if (!cxfWebService.IsClient()) {
-                continue;
-            }
-            synthetics.produce(SyntheticBeanBuildItem.configure(CXFClientInfo.class).named(cxfWebService.getSei())
-                    .supplier(recorder.cxfClientInfoSupplier(
-                            cxfWebService.getSei(),
-                            cxfConfig,
-                            cxfWebService.getSoapBinding(),
-                            cxfWebService.getWsNamespace(),
-                            cxfWebService.getWsName(),
-                            cxfWebService.getClassNames()))
-                    .unremovable()
-                    .setRuntimeInit()
-                    .done());
-        }
+
+        //
+        // Create injectable bean per SEI-only interface, i.e. for each
+        // class annotated as @WebService and without implementation.
+        //
+        cxfWebServices
+                .stream()
+                .filter(CxfWebServiceBuildItem::IsClient)
+                .map(CxfWebServiceBuildItem::asRuntimeData)
+                .map(cxf -> {
+                    String fmt = "producing CXF client bean named '%s' for SEI %s";
+                    String msg = String.format(fmt, cxf.sei, cxf.sei);
+                    LOGGER.info(msg);
+                    return SyntheticBeanBuildItem
+                            .configure(CXFClientInfo.class)
+                            .named(cxf.sei)
+                            .supplier(recorder.cxfClientInfoSupplier(cxfConfig, cxf))
+                            .unremovable()
+                            .setRuntimeInit()
+                            .done();
+                }).forEach(synthetics::produce);
     }
 
     @BuildStep
@@ -538,9 +544,9 @@ class QuarkusCxfProcessor {
     }
 
     @BuildStep
-    void addDependencies(BuildProducer<IndexDependencyBuildItem> indexDependency) {
-        indexDependency.produce(new IndexDependencyBuildItem("org.glassfish.jaxb", "txw2"));
-        indexDependency.produce(new IndexDependencyBuildItem("org.glassfish.jaxb", "jaxb-runtime"));
+    void addDependencies(BuildProducer<IndexDependencyBuildItem> bp) {
+        bp.produce(new IndexDependencyBuildItem("org.glassfish.jaxb", "txw2"));
+        bp.produce(new IndexDependencyBuildItem("org.glassfish.jaxb", "jaxb-runtime"));
     }
 
     @BuildStep

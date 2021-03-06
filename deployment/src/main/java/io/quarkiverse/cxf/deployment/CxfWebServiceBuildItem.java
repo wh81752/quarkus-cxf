@@ -2,6 +2,7 @@ package io.quarkiverse.cxf.deployment;
 
 import java.util.List;
 
+import io.quarkiverse.cxf.CXFServiceData;
 import io.quarkus.builder.item.MultiBuildItem;
 
 /**
@@ -82,4 +83,23 @@ public final class CxfWebServiceBuildItem extends MultiBuildItem {
     public boolean hasImplementor() {
         return this.implementor != null && !this.implementor.isEmpty();
     }
+
+    /**
+     * Convert all data into a runtime-value data structure that can
+     * be given to a Recorder instance for example.
+     * 
+     * @return
+     */
+    public CXFServiceData asRuntimeData() {
+        CXFServiceData cxf = new CXFServiceData();
+        cxf.path = this.getPath();
+        cxf.sei = this.getSei();
+        cxf.binding = this.getSoapBinding();
+        cxf.clnames.addAll(this.getClassNames());
+        cxf.wsName = this.getWsName();
+        cxf.wsNamespace = this.getWsNamespace();
+        return cxf;
+
+    }
+
 }

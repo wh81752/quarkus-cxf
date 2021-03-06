@@ -1,16 +1,12 @@
 package io.quarkiverse.cxf;
 
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 import java.util.function.Supplier;
 
 import org.jboss.logging.Logger;
 
 import io.quarkiverse.cxf.transport.CxfHandler;
 import io.quarkus.arc.runtime.BeanContainer;
-import io.quarkus.runtime.RuntimeValue;
 import io.quarkus.runtime.annotations.Recorder;
 import io.vertx.core.Handler;
 import io.vertx.ext.web.RoutingContext;
@@ -29,9 +25,19 @@ public class CXFRecorder {
      * <p>
      * This method is called once per @WebService *interface*.
      */
+    public Supplier<CXFClientInfo> cxfClientInfoSupplier(CxfConfig cxfConfig, CXFServiceData wsdata) {
+        return this.cxfClientInfoSupplier(
+                cxfConfig,
+                wsdata.sei,
+                wsdata.binding,
+                wsdata.wsNamespace,
+                wsdata.wsName,
+                wsdata.clnames);
+    }
+
     public Supplier<CXFClientInfo> cxfClientInfoSupplier(
-            String sei,
             CxfConfig cxfConfig,
+            String sei,
             String soapBinding,
             String wsNamespace,
             String wsName,
@@ -116,12 +122,13 @@ public class CXFRecorder {
         }
     }
 
-    public void registerCXFServlet(
-            RuntimeValue<CXFServletInfos> runtimeInfos,
-            CxfConfig cxfConfig,
-            CXFServiceData data) {
-        this.registerCXFServlet(runtimeInfos.getValue(), cxfConfig, data);
-    }
+    //    public void registerCXFServlet(
+    //            RuntimeValue<CXFServletInfos> runtimeInfos,
+    //            CxfConfig cxfConfig,
+    //            CXFServiceData data
+    //    ) {
+    //        this.registerCXFServlet(runtimeInfos.getValue(), cxfConfig, data);
+    //    }
 
     private void registerCXFServlet(
             CXFServletInfos infos,
@@ -177,16 +184,16 @@ public class CXFRecorder {
         }
     }
 
-    public RuntimeValue<CXFServletInfos> createInfos(String path) {
+    public Handler<RoutingContext> registerServlet(
+            String path,
+            CxfConfig cxfConfig,
+            BeanContainer beanContainer,
+            Collection<CXFServiceData> wslist) {
         CXFServletInfos infos = new CXFServletInfos(path);
-        return new RuntimeValue<>(infos);
-    }
-
-    public Handler<RoutingContext> initServer(
-            RuntimeValue<CXFServletInfos> infos,
-            BeanContainer beanContainer) {
-        LOGGER.trace("init server");
-        return new CxfHandler(infos.getValue(), beanContainer);
+        wslist.forEach(it -> {
+            this.registerCXFServlet(infos, cxfConfig, it);
+        });
+        return new CxfHandler(infos, beanContainer);
     }
 
 }
