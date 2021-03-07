@@ -4,13 +4,11 @@ import static io.quarkus.vertx.http.deployment.RouteBuildItem.builder;
 import static java.util.Arrays.asList;
 import static java.util.Optional.ofNullable;
 
-import java.io.BufferedReader;
-import java.io.IOException;
-import java.io.InputStream;
-import java.io.InputStreamReader;
+import java.io.*;
 import java.lang.reflect.Modifier;
 import java.net.URL;
 import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -31,6 +29,7 @@ import org.wildfly.common.annotation.Nullable;
 import io.quarkiverse.cxf.*;
 import io.quarkus.arc.deployment.*;
 import io.quarkus.arc.processor.DotNames;
+import io.quarkus.bootstrap.BootstrapDebug;
 import io.quarkus.builder.item.BuildItem;
 import io.quarkus.deployment.annotations.BuildProducer;
 import io.quarkus.deployment.annotations.BuildStep;
@@ -114,9 +113,10 @@ class QuarkusCxfProcessor {
     }
 
     @BuildStep
-    public void build(
-            CombinedIndexBuildItem combinedIndexBuildItem,
-            CxfBuildTimeConfig cxfBuildTimeConfig,
+    public void foobar(
+            // consume
+            List<CxfUeberBuildItem> items,
+            // produce
             BuildProducer<FeatureBuildItem> feature,
             BuildProducer<ReflectiveClassBuildItem> reflectiveClass,
             BuildProducer<NativeImageProxyDefinitionBuildItem> proxies,
@@ -124,22 +124,65 @@ class QuarkusCxfProcessor {
             BuildProducer<CxfWebServiceBuildItem> cxfWebServices,
             BuildProducer<AdditionalBeanBuildItem> additionalBeans,
             BuildProducer<UnremovableBeanBuildItem> unremovableBeans) {
-        CxfBuildProducer bp = new CxfBuildProducer();
-        bp.feature = feature;
-        bp.reflectiveClass = reflectiveClass;
-        bp.proxies = proxies;
-        bp.generatedBeans = generatedBeans;
-        bp.cxfWebServices = cxfWebServices;
-        bp.additionalBeans = additionalBeans;
-        bp.unremovableBeans = unremovableBeans;
-        this._build(combinedIndexBuildItem, cxfBuildTimeConfig, bp);
+        items.forEach(item -> {
+            item.features.forEach(feature::produce);
+            item.reflectiveClasss.forEach(reflectiveClass::produce);
+            item.proxies.forEach(proxies::produce);
+            item.generatedBeans.forEach(generatedBeans::produce);
+            item.cxfWebServices.forEach(cxfWebServices::produce);
+            item.additionalBeans.forEach(additionalBeans::produce);
+            item.unremovableBeans.forEach(unremovableBeans::produce);
+        });
+    }
+
+    public static class GeneratedBeanRecorder implements ClassOutput {
+        private final Collection<GeneratedBeanBuildItem> sink;
+        private final Map<String, StringWriter> sources;
+
+        public GeneratedBeanRecorder(Collection<GeneratedBeanBuildItem> sink) {
+            this.sink = sink;
+            this.sources = BootstrapDebug.DEBUG_SOURCES_DIR != null ? new ConcurrentHashMap() : null;
+        }
+
+        public GeneratedBeanRecorder(CxfUeberBuildItem cxf) {
+            this.sink = cxf.generatedBeans;
+            this.sources = BootstrapDebug.DEBUG_SOURCES_DIR != null ? new ConcurrentHashMap() : null;
+        }
+
+        public void write(
+                String className,
+                byte[] bytes) {
+            String source = null;
+            if (this.sources != null) {
+                StringWriter sw = this.sources.get(className);
+                if (sw != null) {
+                    source = sw.toString();
+                }
+            }
+            //
+            // generate new bean out of classname and bytes.
+            //
+            this.sink.add(new GeneratedBeanBuildItem(className, bytes, source));
+        }
+
+        public Writer getSourceWriter(String className) {
+            Writer r = ClassOutput.super.getSourceWriter(className);
+            if (this.sources != null) {
+                StringWriter writer = new StringWriter();
+                this.sources.put(className, writer);
+                r = writer;
+            } else {
+                r = ClassOutput.super.getSourceWriter(className);
+            }
+            return r;
+        }
     }
 
     private void wsTest(
-            CxfBuildProducer bp,
+            CxfUeberBuildItem cxf,
             String sei) {
         List<String> wrapperClassNames = new ArrayList<>();
-        ClassOutput classOutput = new GeneratedBeanGizmoAdaptor(bp.generatedBeans);
+        ClassOutput classOutput = new GeneratedBeanRecorder(cxf);
         quarkusCapture c = new quarkusCapture(classOutput);
         QuarkusJaxWsServiceFactoryBean jaxwsFac = new QuarkusJaxWsServiceFactoryBean();
         Bus bus = BusFactory.getDefaultBus();
@@ -149,9 +192,12 @@ class QuarkusCxfProcessor {
         try {
             jaxwsFac.setServiceClass(Thread.currentThread().getContextClassLoader().loadClass(sei));
             jaxwsFac.create();
+            //  TODO: what to do with wrapperClassNames??
             wrapperClassNames.addAll(jaxwsFac.getWrappersClassNames());
         } catch (ClassNotFoundException e) {
             LOGGER.error("failed to load WS class : " + sei);
+        } finally {
+            // nothing
         }
     }
 
@@ -274,25 +320,26 @@ class QuarkusCxfProcessor {
         }
     }
 
-    private void _build(
+    @BuildStep
+    public void build(
             CombinedIndexBuildItem combinedIndexBuildItem,
             CxfBuildTimeConfig cxfBuildTimeConfig,
-            CxfBuildProducer bp) {
+            BuildProducer<CxfUeberBuildItem> bp) {
+        CxfUeberBuildItem cxf = new CxfUeberBuildItem();
+
         IndexView index = combinedIndexBuildItem.getIndex();
 
         //
         // The provided feature.
         //
-        bp.produceFeature();
+        cxf.produceFeature();
 
         // Register package-infos for reflection
         index.getAnnotations(XML_NAMESPACE)
                 .stream()
                 .map(AnnotationInstance::target)
                 .map(AnnotationTarget::asClass)
-                .map(ClassInfo::name)
-                .map(DotName::toString)
-                .forEach(bp::produceReflectiveClass);
+                .forEach(cxf::produceReflectiveClass);
 
         //
         // produce reflective classes out of all known subclasses.
@@ -300,7 +347,7 @@ class QuarkusCxfProcessor {
         Stream.of(ABSTRACT_FEATURE, ABSTRACT_INTERCEPTOR, DATABINDING)
                 .map(index::getAllKnownSubclasses)
                 .flatMap(Collection::stream)
-                .forEach(bp::produceReflectiveClass);
+                .forEach(cxf::produceReflectiveClass);
 
         //TODO bad code it is set in loop but use outside...
 
@@ -311,14 +358,14 @@ class QuarkusCxfProcessor {
                     return new WebServiceCxf(annotation).withConfig(cxfBuildTimeConfig);
                 })
                 .map(ws -> {
-                    bp.produceReflectiveClass(ws.wsClass());
-                    bp.unremovable(ws.wsClass());
+                    cxf.produceReflectiveClass(ws.wsClass());
+                    cxf.unremovable(ws.wsClass());
                     return ws;
                 })
                 .filter(WebServiceCxf::isInterface)
                 .map(ws -> {
 
-                    bp.produceProxies(
+                    cxf.produceProxies(
                             ws.wsClass().name().toString(),
                             "javax.xml.ws.BindingProvider",
                             "java.io.Closeable",
@@ -336,15 +383,15 @@ class QuarkusCxfProcessor {
                             .flatMap(Collection::stream)
                             .filter(Objects::nonNull)
                             .map(ai -> ai.value("className"))
-                            .forEach(bp::produceReflectiveClass);
+                            .forEach(cxf::produceReflectiveClass);
 
                     return ws;
                 })
                 .forEach(ws -> {
-                    List<String> wrapperClassNames = new ArrayList<>();
+                    //List<String> wrapperClassNames = new ArrayList<>();
 
                     // Perhaps not correct -> wrapper classes are not known.
-                    wsTest(bp, ws.sei);
+                    wsTest(cxf, ws.sei);
 
                     Collection<ClassInfo> implementors = WebServiceCxf.implementorsOf(index, ws.sei);
 
@@ -355,9 +402,12 @@ class QuarkusCxfProcessor {
                         WebServiceCxf client = new WebServiceCxf(ws);
                         client.path = cxfBuildTimeConfig.path;
 
-                        String seiClientproducerClassName = client.sei + "CxfClientProducer";
-                        generateCxfClientProducer(bp.generatedBeans, seiClientproducerClassName, client.sei);
-                        bp.unremovable(seiClientproducerClassName);
+                        //                     String seiClientproducerClassName = client.sei + "CxfClientProducer";
+                        //                     generateCxfClientProducer(cxf.generatedBeans, seiClientproducerClassName,
+                        //                     client.sei);
+                        //                     cxf.unremovable(seiClientproducerClassName);
+
+                        generateCxfClientProducer(cxf, client.sei);
 
                         AnnotationInstance webserviceClient = findWebServiceClientAnnotation(
                                 index,
@@ -366,17 +416,22 @@ class QuarkusCxfProcessor {
                             client.wsName = webserviceClient.value("name").asString();
                             client.wsNamespace = webserviceClient.value("targetNamespace").asString();
                         }
-                        bp.produceWebService(client);
+                        cxf.produceWebService(client);
                     } else {
                         implementors
                                 .stream()
                                 .map(wsClass -> new WebServiceCxf(ws)
                                         .withImplementor(wsClass)
                                         .withBinding(wsClass.classAnnotation(BINDING_TYPE_ANNOTATION)))
-                                .forEach(bp::produceWebService);
-                        bp.produceWebService(ws);
+                                .forEach(cxf::produceWebService);
+                        cxf.produceWebService(ws);
                     }
                 });
+
+        //
+        // eventually produce my items for consumption.
+        //
+        bp.produce(cxf);
     }
 
     /**
@@ -1270,18 +1325,20 @@ class QuarkusCxfProcessor {
      * }
      */
     private void generateCxfClientProducer(
-            BuildProducer<GeneratedBeanBuildItem> generatedBean,
-            String cxfClientProducerClassName,
+            CxfUeberBuildItem cxf,
             String sei) {
-        ClassOutput classOutput = new GeneratedBeanGizmoAdaptor(generatedBean);
+        String cxfClientProducerClassName = sei + "CxfClientProducer";
+        ClassOutput classOutput = new GeneratedBeanRecorder(cxf);
 
-        try (ClassCreator classCreator = ClassCreator.builder().classOutput(classOutput)
+        try (ClassCreator classCreator = ClassCreator.builder()
+                .classOutput(classOutput)
                 .className(cxfClientProducerClassName)
                 .superClass(CxfClientProducer.class)
                 .build()) {
-            classCreator.addAnnotation(ApplicationScoped.class);
+            FieldCreator fieldCreator;
 
-            FieldCreator fieldCreator = classCreator.getFieldCreator("info", "io.quarkiverse.cxf.CXFClientInfo")
+            classCreator.addAnnotation(ApplicationScoped.class);
+            fieldCreator = classCreator.getFieldCreator("info", "io.quarkiverse.cxf.CXFClientInfo")
                     .setModifiers(Modifier.PUBLIC);
 
             fieldCreator.addAnnotation(AnnotationInstance.create(DotNames.NAMED, null, new AnnotationValue[] {
