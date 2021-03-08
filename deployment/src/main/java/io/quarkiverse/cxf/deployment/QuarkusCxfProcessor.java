@@ -5,7 +5,10 @@ import static io.quarkus.vertx.http.deployment.RouteBuildItem.builder;
 import static java.util.Arrays.asList;
 import static java.util.stream.Collectors.toList;
 
-import java.io.*;
+import java.io.BufferedReader;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.InputStreamReader;
 import java.lang.reflect.Modifier;
 import java.net.URL;
 import java.util.*;
@@ -400,22 +403,25 @@ class QuarkusCxfProcessor {
     }
 
     @BuildStep
-    List<RuntimeInitializedClassBuildItem> runtimeInitializedClasses() {
-        return asList(
-                new RuntimeInitializedClassBuildItem("io.netty.buffer.PooledByteBufAllocator"),
-                new RuntimeInitializedClassBuildItem("io.netty.buffer.UnpooledHeapByteBuf"),
-                new RuntimeInitializedClassBuildItem("io.netty.buffer.UnpooledUnsafeHeapByteBuf"),
-                new RuntimeInitializedClassBuildItem(
-                        "io.netty.buffer.UnpooledByteBufAllocator$InstrumentedUnpooledUnsafeHeapByteBuf"),
-                new RuntimeInitializedClassBuildItem("io.netty.buffer.AbstractReferenceCountedByteBuf"),
-                new RuntimeInitializedClassBuildItem("org.apache.cxf.staxutils.validation.W3CMultiSchemaFactory"),
-                new RuntimeInitializedClassBuildItem("com.sun.xml.bind.v2.runtime.output.FastInfosetStreamWriterOutput"));
+    void runtimeInitializedClasses(BuildProducer<RuntimeInitializedClassBuildItem> bp) {
+        Stream.of(
+                "io.netty.buffer.PooledByteBufAllocator",
+                "io.netty.buffer.UnpooledHeapByteBuf",
+                "io.netty.buffer.UnpooledUnsafeHeapByteBuf",
+                "io.netty.buffer.UnpooledByteBufAllocator$InstrumentedUnpooledUnsafeHeapByteBuf",
+                "io.netty.buffer.AbstractReferenceCountedByteBuf",
+                "org.apache.cxf.staxutils.validation.W3CMultiSchemaFactory",
+                "com.sun.xml.bind.v2.runtime.output.FastInfosetStreamWriterOutput").map(RuntimeInitializedClassBuildItem::new)
+                .forEach(bp::produce);
     }
 
     @BuildStep
     void addDependencies(BuildProducer<IndexDependencyBuildItem> bp) {
-        bp.produce(new IndexDependencyBuildItem("org.glassfish.jaxb", "txw2"));
-        bp.produce(new IndexDependencyBuildItem("org.glassfish.jaxb", "jaxb-runtime"));
+        Stream.of(
+                "org.glassfish.jaxb:txw2",
+                "org.glassfish.jaxb:jaxb-runtime").map(it -> it.split(":"))
+                .map(it -> new IndexDependencyBuildItem(it[0], it[1]))
+                .forEach(bp::produce);
     }
 
     @BuildStep
@@ -501,276 +507,279 @@ class QuarkusCxfProcessor {
                 false,
                 "org.apache.cxf.common.jaxb.NamespaceMapper"));
 
-        reflectiveItems.produce(new ReflectiveClassBuildItem(true, true,
-                "org.apache.cxf.common.spi.ClassLoaderService",
-                "org.apache.cxf.common.spi" +
-                        ".GeneratedClassClassLoaderCapture",
-                "org.apache.cxf.common.spi" +
-                        ".ClassGeneratorClassLoader$TypeHelperClassLoader",
-                "org.apache.cxf.common.util.ASMHelper",
-                "org.apache.cxf.common.util.ASMHelperImpl",
-                "org.apache.cxf.common.spi.ClassLoaderProxyService",
-                "org.apache.cxf.common.spi.GeneratedNamespaceClassLoader",
-                "org.apache.cxf.common.spi.NamespaceClassCreator",
-                "org.apache.cxf.common.spi.NamespaceClassGenerator",
-                "org.apache.cxf.binding.corba.utils" +
-                        ".CorbaFixedAnyImplClassCreatorProxyService",
-                "org.apache.cxf.binding.corba.utils" +
-                        ".CorbaFixedAnyImplClassCreator",
-                "org.apache.cxf.binding.corba.utils" +
-                        ".CorbaFixedAnyImplClassLoader",
-                "org.apache.cxf.binding.corba.utils" +
-                        ".CorbaFixedAnyImplGenerator",
-                "org.apache.cxf.jaxb.WrapperHelperProxyService",
-                "org.apache.cxf.jaxb.WrapperHelperCreator",
-                "org.apache.cxf.jaxb.WrapperHelperClassGenerator",
-                "org.apache.cxf.jaxb.WrapperHelperClassLoader",
-                "org.apache.cxf.jaxb.FactoryClassProxyService",
-                "org.apache.cxf.jaxb.FactoryClassCreator",
-                "org.apache.cxf.jaxb.FactoryClassGenerator",
-                "org.apache.cxf.jaxb.FactoryClassLoader",
-                "org.apache.cxf.jaxws.spi.WrapperClassCreatorProxyService",
-                "org.apache.cxf.jaxws.spi.WrapperClassCreator",
-                "org.apache.cxf.jaxws.spi.WrapperClassLoader",
-                "org.apache.cxf.jaxws.spi.WrapperClassGenerator",
-                "org.apache.cxf.endpoint.dynamic" +
-                        ".ExceptionClassCreatorProxyService",
-                "org.apache.cxf.endpoint.dynamic.ExceptionClassCreator",
-                "org.apache.cxf.endpoint.dynamic.ExceptionClassLoader",
-                "org.apache.cxf.endpoint.dynamic.ExceptionClassGenerator",
-                "org.apache.cxf.wsdl.ExtensionClassCreatorProxyService",
-                "org.apache.cxf.wsdl.ExtensionClassCreator",
-                "org.apache.cxf.wsdl.ExtensionClassLoader",
-                "org.apache.cxf.wsdl.ExtensionClassGenerator",
-                "io.quarkiverse.cxf.QuarkusJAXBBeanInfo",
-                "java.net.HttpURLConnection",
-                "com.sun.xml.bind.v2.schemagen.xmlschema.Schema",
-                "com.sun.xml.bind.v2.schemagen.xmlschema.package-info",
-                "com.sun.org.apache.xerces.internal.dom.DocumentTypeImpl",
-                "org.w3c.dom.DocumentType",
-                "java.lang.Throwable",
-                "java.nio.charset.Charset",
-                "com.sun.org.apache.xerces.internal.parsers" +
-                        ".StandardParserConfiguration",
-                "com.sun.org.apache.xerces.internal.xni.parser" +
-                        ".XMLInputSource",
-                "com.sun.org.apache.xml.internal.resolver.readers" +
-                        ".XCatalogReader",
-                "com.sun.org.apache.xml.internal.resolver.readers" +
-                        ".ExtendedXMLCatalogReader",
-                "com.sun.org.apache.xml.internal.resolver.Catalog",
-                "org.apache.xml.resolver.readers.OASISXMLCatalogReader",
-                "com.sun.org.apache.xml.internal.resolver.readers" +
-                        ".XCatalogReader",
-                "com.sun.org.apache.xml.internal.resolver.readers" +
-                        ".OASISXMLCatalogReader",
-                "com.sun.org.apache.xml.internal.resolver.readers" +
-                        ".TR9401CatalogReader",
-                "com.sun.org.apache.xml.internal.resolver.readers" +
-                        ".SAXCatalogReader",
-                //"com.sun.xml.txw2.TypedXmlWriter",
-                //"com.sun.codemodel.JAnnotationWriter",
-                //"com.sun.xml.txw2.ContainerElement",
-                "javax.xml.parsers.DocumentBuilderFactory",
-                "com.sun.org.apache.xerces.internal.jaxp" +
-                        ".DocumentBuilderFactoryImpl",
-                "com.sun.org.apache.xml.internal.serializer.ToXMLStream",
-                "com.sun.org.apache.xerces.internal.dom.EntityImpl",
-                "org.apache.cxf.common.jaxb.JAXBUtils$S2JJAXBModel",
-                "org.apache.cxf.common.jaxb.JAXBUtils$Options",
-                "org.apache.cxf.common.jaxb.JAXBUtils$JCodeModel",
-                "org.apache.cxf.common.jaxb.JAXBUtils$Mapping",
-                "org.apache.cxf.common.jaxb.JAXBUtils$TypeAndAnnotation",
-                "org.apache.cxf.common.jaxb.JAXBUtils$JType",
-                "org.apache.cxf.common.jaxb.JAXBUtils$JPackage",
-                "org.apache.cxf.common.jaxb.JAXBUtils$JDefinedClass",
-                "com.sun.xml.bind.v2.model.nav.ReflectionNavigator",
-                "com.sun.xml.bind.v2.runtime.unmarshaller.StAXExConnector",
-                "com.sun.xml.bind.v2.runtime.unmarshaller" +
-                        ".FastInfosetConnector",
-                "com.sun.xml.bind.v2.runtime.output" +
-                        ".FastInfosetStreamWriterOutput",
-                "org.jvnet.staxex.XMLStreamWriterEx",
-                "com.sun.xml.bind.v2.runtime.output" +
-                        ".StAXExStreamWriterOutput",
-                "org.jvnet.fastinfoset.stax" +
-                        ".LowLevelFastInfosetStreamWriter",
-                "com.sun.xml.fastinfoset.stax.StAXDocumentSerializer",
-                "com.sun.xml.fastinfoset.stax.StAXDocumentParser",
-                "org.jvnet.fastinfoset.stax.FastInfosetStreamReader",
-                "org.jvnet.staxex.XMLStreamReaderEx",
-                // missing from jaxp extension
-                //GregorSamsa but which package ???
-                "com.sun.org.apache.xalan.internal.xsltc.dom" +
-                        ".CollatorFactoryBase",
-                //objecttype in jaxp
-                "com.sun.org.apache.xerces.internal.impl.xs" +
-                        ".XMLSchemaLoader",
-                "java.lang.Object",
-                "java.lang.String",
-                "java.math.BigInteger",
-                "java.math.BigDecimal",
-                "javax.xml.datatype.XMLGregorianCalendar",
-                "javax.xml.datatype.Duration",
-                "java.lang.Integer",
-                "java.lang.Long",
-                "java.lang.Short",
-                "java.lang.Float",
-                "java.lang.Double",
-                "java.lang.Boolean",
-                "java.lang.Byte",
-                "java.lang.StringBuffer",
-                "java.lang.Throwable",
-                "java.lang.Character",
-                "com.sun.xml.bind.api.CompositeStructure",
-                "java.net.URI",
-                "javax.xml.bind.JAXBElement",
-                "javax.xml.namespace.QName",
-                "java.awt.Image",
-                "java.io.File",
-                "java.lang.Class",
-                "java.lang.Void",
-                "java.net.URL",
-                "java.util.Calendar",
-                "java.util.Date",
-                "java.util.GregorianCalendar",
-                "java.util.UUID",
-                "javax.activation.DataHandler",
-                "javax.xml.transform.Source",
-                "com.sun.org.apache.xml.internal.serializer" +
-                        ".ToXMLSAXHandler",
-                "com.sun.org.apache.xerces.internal.xni.parser" +
-                        ".XMLParserConfiguration",
-                "com.sun.org.apache.xerces.internal.parsers" +
-                        ".StandardParserConfiguration",
-                "com.sun.org.apache.xerces.internal.xni.parser" +
-                        ".XMLInputSource",
-                "org.xml.sax.helpers.XMLReaderAdapter",
-                "org.xml.sax.helpers.XMLFilterImpl",
-                "javax.xml.validation.ValidatorHandler",
-                "org.xml.sax.ext.DefaultHandler2",
-                "org.xml.sax.helpers.DefaultHandler",
-                "com.sun.org.apache.xalan.internal.lib.Extensions",
-                "com.sun.org.apache.xalan.internal.lib.ExsltCommon",
-                "com.sun.org.apache.xalan.internal.lib.ExsltMath",
-                "com.sun.org.apache.xalan.internal.lib.ExsltSets",
-                "com.sun.org.apache.xalan.internal.lib.ExsltDatetime",
-                "com.sun.org.apache.xalan.internal.lib.ExsltStrings",
-                "com.sun.org.apache.xerces.internal.dom.DocumentImpl",
-                "com.sun.org.apache.xalan.internal.processor" +
-                        ".TransformerFactoryImpl",
-                "com.sun.org.apache.xerces.internal.dom.CoreDocumentImpl",
-                "com.sun.org.apache.xerces.internal.dom.PSVIDocumentImpl",
-                "com.sun.org.apache.xpath.internal.domapi" +
-                        ".XPathEvaluatorImpl",
-                "com.sun.org.apache.xerces.internal.impl.xs" +
-                        ".XMLSchemaValidator",
-                "com.sun.org.apache.xerces.internal.impl.dtd" +
-                        ".XMLDTDValidator",
-                "com.sun.org.apache.xml.internal.utils.FastStringBuffer",
-                "com.sun.xml.internal.stream.events.XMLEventFactoryImpl",
-                "com.sun.xml.internal.stream.XMLOutputFactoryImpl",
-                "com.sun.xml.internal.stream.XMLInputFactoryImpl",
-                "com.sun.org.apache.xerces.internal.jaxp.datatype" +
-                        ".DatatypeFactoryImpl",
-                "javax.xml.stream.XMLStreamConstants",
-                "com.sun.org.apache.xalan.internal.xslt" +
-                        ".XSLProcessorVersion",
-                "com.sun.org.apache.xalan.internal.processor" +
-                        ".XSLProcessorVersion",
-                "com.sun.org.apache.xalan.internal.Version",
-                "com.sun.org.apache.xerces.internal.framework.Version",
-                "com.sun.org.apache.xerces.internal.impl.Version",
-                "org.apache.crimson.parser.Parser2",
-                "org.apache.tools.ant.Main",
-                "org.w3c.dom.Document",
-                "org.w3c.dom.Node",
-                "org.xml.sax.Parser",
-                "org.xml.sax.XMLReader",
-                "org.xml.sax.helpers.AttributesImpl",
-                "org.apache.cxf.common.logging.Slf4jLogger",
-                "io.quarkiverse.cxf.AddressTypeExtensibility",
-                "io.quarkiverse.cxf.CXFException",
-                "io.quarkiverse.cxf.HTTPClientPolicyExtensibility",
-                "io.quarkiverse.cxf.HTTPServerPolicyExtensibility",
-                "io.quarkiverse.cxf.XMLBindingMessageFormatExtensibility",
-                "io.quarkiverse.cxf.XMLFormatBindingExtensibility",
-                "org.apache.cxf.common.util.ReflectionInvokationHandler",
-                "com.sun.codemodel.internal.writer.FileCodeWriter",
-                "com.sun.codemodel.writer.FileCodeWriter",
-                "com.sun.xml.internal.bind.marshaller.NoEscapeHandler",
-                "com.sun.xml.internal.bind.marshaller" +
-                        ".MinimumEscapeHandler",
-                "com.sun.xml.internal.bind.marshaller.DumbEscapeHandler",
-                "com.sun.xml.internal.bind.marshaller.NioEscapeHandler",
-                "com.sun.xml.bind.marshaller.NoEscapeHandler",
-                "com.sun.xml.bind.marshaller.MinimumEscapeHandler",
-                "com.sun.xml.bind.marshaller.DumbEscapeHandler",
-                "com.sun.xml.bind.marshaller.NioEscapeHandler",
-                "com.sun.tools.internal.xjc.api.XJC",
-                "com.sun.tools.xjc.api.XJC",
-                "com.sun.xml.internal.bind.api.JAXBRIContext",
-                "com.sun.xml.bind.api.JAXBRIContext",
-                "org.apache.cxf.common.util.ReflectionInvokationHandler",
-                "javax.xml.ws.wsaddressing.W3CEndpointReference",
-                "org.apache.cxf.common.jaxb.JAXBBeanInfo",
-                "javax.xml.bind.JAXBContext",
-                "com.sun.xml.bind.v2.runtime.LeafBeanInfoImpl",
-                "com.sun.xml.bind.v2.runtime.ArrayBeanInfoImpl",
-                "com.sun.xml.bind.v2.runtime.ValueListBeanInfoImpl",
-                "com.sun.xml.bind.v2.runtime.AnyTypeBeanInfo",
-                "com.sun.xml.bind.v2.runtime.JaxBeanInfo",
-                "com.sun.xml.bind.v2.runtime.ClassBeanInfoImpl",
-                "com.sun.xml.bind.v2.runtime.CompositeStructureBeanInfo",
-                "com.sun.xml.bind.v2.runtime.ElementBeanInfoImpl",
-                "com.sun.xml.bind.v2.runtime.MarshallerImpl",
-                "com.sun.xml.messaging.saaj.soap.SOAPDocumentImpl",
-                "com.sun.xml.internal.messaging.saaj.soap" +
-                        ".SOAPDocumentImpl",
-                "com.sun.org.apache.xerces.internal.dom" +
-                        ".DOMXSImplementationSourceImpl",
-                "javax.wsdl.Types",
-                "javax.wsdl.extensions.mime.MIMEPart",
-                "com.sun.xml.bind.v2.runtime.BridgeContextImpl",
-                "com.sun.xml.bind.v2.runtime.JAXBContextImpl",
-                "com.sun.xml.bind.subclassReplacements",
-                "com.sun.xml.bind.defaultNamespaceRemap",
-                "com.sun.xml.bind.c14n",
-                "com.sun.xml.bind.v2.model.annotation" +
-                        ".RuntimeAnnotationReader",
-                "com.sun.xml.bind.XmlAccessorFactory",
-                "com.sun.xml.bind.treatEverythingNillable",
-                "com.sun.xml.bind.retainReferenceToInfo",
-                "com.sun.xml.internal.bind.subclassReplacements",
-                "com.sun.xml.internal.bind.defaultNamespaceRemap",
-                "com.sun.xml.internal.bind.c14n",
-                "org.apache.cxf.common.jaxb.SchemaCollectionContextProxy",
-                "com.sun.xml.internal.bind.v2.model.annotation" +
-                        ".RuntimeAnnotationReader",
-                "com.sun.xml.internal.bind.XmlAccessorFactory",
-                "com.sun.xml.internal.bind.treatEverythingNillable",
-                "com.sun.xml.bind.marshaller.CharacterEscapeHandler",
-                "com.sun.xml.internal.bind.marshaller" +
-                        ".CharacterEscapeHandler",
-                "com.sun.org.apache.xerces.internal.dom.ElementNSImpl",
-                "sun.security.ssl.SSLLogger",
-                "com.ibm.wsdl.extensions.schema.SchemaImpl",
-                //TODO add refection only if soap 1.2
-                "com.ibm.wsdl.extensions.soap12.SOAP12AddressImpl",
-                "com.ibm.wsdl.extensions.soap12.SOAP12AddressSerializer",
-                "com.ibm.wsdl.extensions.soap12.SOAP12BindingImpl",
-                "com.ibm.wsdl.extensions.soap12.SOAP12BindingSerializer",
-                "com.ibm.wsdl.extensions.soap12.SOAP12BodyImpl",
-                "com.ibm.wsdl.extensions.soap12.SOAP12BodySerializer",
-                "com.ibm.wsdl.extensions.soap12.SOAP12Constants",
-                "com.ibm.wsdl.extensions.soap12.SOAP12FaultImpl",
-                "com.ibm.wsdl.extensions.soap12.SOAP12FaultSerializer",
-                "com.ibm.wsdl.extensions.soap12.SOAP12HeaderFaultImpl",
-                "com.ibm.wsdl.extensions.soap12.SOAP12HeaderImpl",
-                "com.ibm.wsdl.extensions.soap12.SOAP12HeaderSerializer",
-                "com.ibm.wsdl.extensions.soap12.SOAP12OperationImpl",
-                "com.ibm.wsdl.extensions.soap12.SOAP12OperationSerializer",
-                "com.sun.xml.internal.bind.retainReferenceToInfo"));
+        reflectiveItems.produce(
+                new ReflectiveClassBuildItem(
+                        true,
+                        true,
+                        "org.apache.cxf.common.spi.ClassLoaderService",
+                        "org.apache.cxf.common.spi" +
+                                ".GeneratedClassClassLoaderCapture",
+                        "org.apache.cxf.common.spi" +
+                                ".ClassGeneratorClassLoader$TypeHelperClassLoader",
+                        "org.apache.cxf.common.util.ASMHelper",
+                        "org.apache.cxf.common.util.ASMHelperImpl",
+                        "org.apache.cxf.common.spi.ClassLoaderProxyService",
+                        "org.apache.cxf.common.spi.GeneratedNamespaceClassLoader",
+                        "org.apache.cxf.common.spi.NamespaceClassCreator",
+                        "org.apache.cxf.common.spi.NamespaceClassGenerator",
+                        "org.apache.cxf.binding.corba.utils" +
+                                ".CorbaFixedAnyImplClassCreatorProxyService",
+                        "org.apache.cxf.binding.corba.utils" +
+                                ".CorbaFixedAnyImplClassCreator",
+                        "org.apache.cxf.binding.corba.utils" +
+                                ".CorbaFixedAnyImplClassLoader",
+                        "org.apache.cxf.binding.corba.utils" +
+                                ".CorbaFixedAnyImplGenerator",
+                        "org.apache.cxf.jaxb.WrapperHelperProxyService",
+                        "org.apache.cxf.jaxb.WrapperHelperCreator",
+                        "org.apache.cxf.jaxb.WrapperHelperClassGenerator",
+                        "org.apache.cxf.jaxb.WrapperHelperClassLoader",
+                        "org.apache.cxf.jaxb.FactoryClassProxyService",
+                        "org.apache.cxf.jaxb.FactoryClassCreator",
+                        "org.apache.cxf.jaxb.FactoryClassGenerator",
+                        "org.apache.cxf.jaxb.FactoryClassLoader",
+                        "org.apache.cxf.jaxws.spi.WrapperClassCreatorProxyService",
+                        "org.apache.cxf.jaxws.spi.WrapperClassCreator",
+                        "org.apache.cxf.jaxws.spi.WrapperClassLoader",
+                        "org.apache.cxf.jaxws.spi.WrapperClassGenerator",
+                        "org.apache.cxf.endpoint.dynamic" +
+                                ".ExceptionClassCreatorProxyService",
+                        "org.apache.cxf.endpoint.dynamic.ExceptionClassCreator",
+                        "org.apache.cxf.endpoint.dynamic.ExceptionClassLoader",
+                        "org.apache.cxf.endpoint.dynamic.ExceptionClassGenerator",
+                        "org.apache.cxf.wsdl.ExtensionClassCreatorProxyService",
+                        "org.apache.cxf.wsdl.ExtensionClassCreator",
+                        "org.apache.cxf.wsdl.ExtensionClassLoader",
+                        "org.apache.cxf.wsdl.ExtensionClassGenerator",
+                        "io.quarkiverse.cxf.QuarkusJAXBBeanInfo",
+                        "java.net.HttpURLConnection",
+                        "com.sun.xml.bind.v2.schemagen.xmlschema.Schema",
+                        "com.sun.xml.bind.v2.schemagen.xmlschema.package-info",
+                        "com.sun.org.apache.xerces.internal.dom.DocumentTypeImpl",
+                        "org.w3c.dom.DocumentType",
+                        "java.lang.Throwable",
+                        "java.nio.charset.Charset",
+                        "com.sun.org.apache.xerces.internal.parsers" +
+                                ".StandardParserConfiguration",
+                        "com.sun.org.apache.xerces.internal.xni.parser" +
+                                ".XMLInputSource",
+                        "com.sun.org.apache.xml.internal.resolver.readers" +
+                                ".XCatalogReader",
+                        "com.sun.org.apache.xml.internal.resolver.readers" +
+                                ".ExtendedXMLCatalogReader",
+                        "com.sun.org.apache.xml.internal.resolver.Catalog",
+                        "org.apache.xml.resolver.readers.OASISXMLCatalogReader",
+                        "com.sun.org.apache.xml.internal.resolver.readers" +
+                                ".XCatalogReader",
+                        "com.sun.org.apache.xml.internal.resolver.readers" +
+                                ".OASISXMLCatalogReader",
+                        "com.sun.org.apache.xml.internal.resolver.readers" +
+                                ".TR9401CatalogReader",
+                        "com.sun.org.apache.xml.internal.resolver.readers" +
+                                ".SAXCatalogReader",
+                        //"com.sun.xml.txw2.TypedXmlWriter",
+                        //"com.sun.codemodel.JAnnotationWriter",
+                        //"com.sun.xml.txw2.ContainerElement",
+                        "javax.xml.parsers.DocumentBuilderFactory",
+                        "com.sun.org.apache.xerces.internal.jaxp" +
+                                ".DocumentBuilderFactoryImpl",
+                        "com.sun.org.apache.xml.internal.serializer.ToXMLStream",
+                        "com.sun.org.apache.xerces.internal.dom.EntityImpl",
+                        "org.apache.cxf.common.jaxb.JAXBUtils$S2JJAXBModel",
+                        "org.apache.cxf.common.jaxb.JAXBUtils$Options",
+                        "org.apache.cxf.common.jaxb.JAXBUtils$JCodeModel",
+                        "org.apache.cxf.common.jaxb.JAXBUtils$Mapping",
+                        "org.apache.cxf.common.jaxb.JAXBUtils$TypeAndAnnotation",
+                        "org.apache.cxf.common.jaxb.JAXBUtils$JType",
+                        "org.apache.cxf.common.jaxb.JAXBUtils$JPackage",
+                        "org.apache.cxf.common.jaxb.JAXBUtils$JDefinedClass",
+                        "com.sun.xml.bind.v2.model.nav.ReflectionNavigator",
+                        "com.sun.xml.bind.v2.runtime.unmarshaller.StAXExConnector",
+                        "com.sun.xml.bind.v2.runtime.unmarshaller" +
+                                ".FastInfosetConnector",
+                        "com.sun.xml.bind.v2.runtime.output" +
+                                ".FastInfosetStreamWriterOutput",
+                        "org.jvnet.staxex.XMLStreamWriterEx",
+                        "com.sun.xml.bind.v2.runtime.output" +
+                                ".StAXExStreamWriterOutput",
+                        "org.jvnet.fastinfoset.stax" +
+                                ".LowLevelFastInfosetStreamWriter",
+                        "com.sun.xml.fastinfoset.stax.StAXDocumentSerializer",
+                        "com.sun.xml.fastinfoset.stax.StAXDocumentParser",
+                        "org.jvnet.fastinfoset.stax.FastInfosetStreamReader",
+                        "org.jvnet.staxex.XMLStreamReaderEx",
+                        // missing from jaxp extension
+                        //GregorSamsa but which package ???
+                        "com.sun.org.apache.xalan.internal.xsltc.dom" +
+                                ".CollatorFactoryBase",
+                        //objecttype in jaxp
+                        "com.sun.org.apache.xerces.internal.impl.xs" +
+                                ".XMLSchemaLoader",
+                        "java.lang.Object",
+                        "java.lang.String",
+                        "java.math.BigInteger",
+                        "java.math.BigDecimal",
+                        "javax.xml.datatype.XMLGregorianCalendar",
+                        "javax.xml.datatype.Duration",
+                        "java.lang.Integer",
+                        "java.lang.Long",
+                        "java.lang.Short",
+                        "java.lang.Float",
+                        "java.lang.Double",
+                        "java.lang.Boolean",
+                        "java.lang.Byte",
+                        "java.lang.StringBuffer",
+                        "java.lang.Throwable",
+                        "java.lang.Character",
+                        "com.sun.xml.bind.api.CompositeStructure",
+                        "java.net.URI",
+                        "javax.xml.bind.JAXBElement",
+                        "javax.xml.namespace.QName",
+                        "java.awt.Image",
+                        "java.io.File",
+                        "java.lang.Class",
+                        "java.lang.Void",
+                        "java.net.URL",
+                        "java.util.Calendar",
+                        "java.util.Date",
+                        "java.util.GregorianCalendar",
+                        "java.util.UUID",
+                        "javax.activation.DataHandler",
+                        "javax.xml.transform.Source",
+                        "com.sun.org.apache.xml.internal.serializer" +
+                                ".ToXMLSAXHandler",
+                        "com.sun.org.apache.xerces.internal.xni.parser" +
+                                ".XMLParserConfiguration",
+                        "com.sun.org.apache.xerces.internal.parsers" +
+                                ".StandardParserConfiguration",
+                        "com.sun.org.apache.xerces.internal.xni.parser" +
+                                ".XMLInputSource",
+                        "org.xml.sax.helpers.XMLReaderAdapter",
+                        "org.xml.sax.helpers.XMLFilterImpl",
+                        "javax.xml.validation.ValidatorHandler",
+                        "org.xml.sax.ext.DefaultHandler2",
+                        "org.xml.sax.helpers.DefaultHandler",
+                        "com.sun.org.apache.xalan.internal.lib.Extensions",
+                        "com.sun.org.apache.xalan.internal.lib.ExsltCommon",
+                        "com.sun.org.apache.xalan.internal.lib.ExsltMath",
+                        "com.sun.org.apache.xalan.internal.lib.ExsltSets",
+                        "com.sun.org.apache.xalan.internal.lib.ExsltDatetime",
+                        "com.sun.org.apache.xalan.internal.lib.ExsltStrings",
+                        "com.sun.org.apache.xerces.internal.dom.DocumentImpl",
+                        "com.sun.org.apache.xalan.internal.processor" +
+                                ".TransformerFactoryImpl",
+                        "com.sun.org.apache.xerces.internal.dom.CoreDocumentImpl",
+                        "com.sun.org.apache.xerces.internal.dom.PSVIDocumentImpl",
+                        "com.sun.org.apache.xpath.internal.domapi" +
+                                ".XPathEvaluatorImpl",
+                        "com.sun.org.apache.xerces.internal.impl.xs" +
+                                ".XMLSchemaValidator",
+                        "com.sun.org.apache.xerces.internal.impl.dtd" +
+                                ".XMLDTDValidator",
+                        "com.sun.org.apache.xml.internal.utils.FastStringBuffer",
+                        "com.sun.xml.internal.stream.events.XMLEventFactoryImpl",
+                        "com.sun.xml.internal.stream.XMLOutputFactoryImpl",
+                        "com.sun.xml.internal.stream.XMLInputFactoryImpl",
+                        "com.sun.org.apache.xerces.internal.jaxp.datatype" +
+                                ".DatatypeFactoryImpl",
+                        "javax.xml.stream.XMLStreamConstants",
+                        "com.sun.org.apache.xalan.internal.xslt" +
+                                ".XSLProcessorVersion",
+                        "com.sun.org.apache.xalan.internal.processor" +
+                                ".XSLProcessorVersion",
+                        "com.sun.org.apache.xalan.internal.Version",
+                        "com.sun.org.apache.xerces.internal.framework.Version",
+                        "com.sun.org.apache.xerces.internal.impl.Version",
+                        "org.apache.crimson.parser.Parser2",
+                        "org.apache.tools.ant.Main",
+                        "org.w3c.dom.Document",
+                        "org.w3c.dom.Node",
+                        "org.xml.sax.Parser",
+                        "org.xml.sax.XMLReader",
+                        "org.xml.sax.helpers.AttributesImpl",
+                        "org.apache.cxf.common.logging.Slf4jLogger",
+                        "io.quarkiverse.cxf.AddressTypeExtensibility",
+                        "io.quarkiverse.cxf.CXFException",
+                        "io.quarkiverse.cxf.HTTPClientPolicyExtensibility",
+                        "io.quarkiverse.cxf.HTTPServerPolicyExtensibility",
+                        "io.quarkiverse.cxf.XMLBindingMessageFormatExtensibility",
+                        "io.quarkiverse.cxf.XMLFormatBindingExtensibility",
+                        "org.apache.cxf.common.util.ReflectionInvokationHandler",
+                        "com.sun.codemodel.internal.writer.FileCodeWriter",
+                        "com.sun.codemodel.writer.FileCodeWriter",
+                        "com.sun.xml.internal.bind.marshaller.NoEscapeHandler",
+                        "com.sun.xml.internal.bind.marshaller" +
+                                ".MinimumEscapeHandler",
+                        "com.sun.xml.internal.bind.marshaller.DumbEscapeHandler",
+                        "com.sun.xml.internal.bind.marshaller.NioEscapeHandler",
+                        "com.sun.xml.bind.marshaller.NoEscapeHandler",
+                        "com.sun.xml.bind.marshaller.MinimumEscapeHandler",
+                        "com.sun.xml.bind.marshaller.DumbEscapeHandler",
+                        "com.sun.xml.bind.marshaller.NioEscapeHandler",
+                        "com.sun.tools.internal.xjc.api.XJC",
+                        "com.sun.tools.xjc.api.XJC",
+                        "com.sun.xml.internal.bind.api.JAXBRIContext",
+                        "com.sun.xml.bind.api.JAXBRIContext",
+                        "org.apache.cxf.common.util.ReflectionInvokationHandler",
+                        "javax.xml.ws.wsaddressing.W3CEndpointReference",
+                        "org.apache.cxf.common.jaxb.JAXBBeanInfo",
+                        "javax.xml.bind.JAXBContext",
+                        "com.sun.xml.bind.v2.runtime.LeafBeanInfoImpl",
+                        "com.sun.xml.bind.v2.runtime.ArrayBeanInfoImpl",
+                        "com.sun.xml.bind.v2.runtime.ValueListBeanInfoImpl",
+                        "com.sun.xml.bind.v2.runtime.AnyTypeBeanInfo",
+                        "com.sun.xml.bind.v2.runtime.JaxBeanInfo",
+                        "com.sun.xml.bind.v2.runtime.ClassBeanInfoImpl",
+                        "com.sun.xml.bind.v2.runtime.CompositeStructureBeanInfo",
+                        "com.sun.xml.bind.v2.runtime.ElementBeanInfoImpl",
+                        "com.sun.xml.bind.v2.runtime.MarshallerImpl",
+                        "com.sun.xml.messaging.saaj.soap.SOAPDocumentImpl",
+                        "com.sun.xml.internal.messaging.saaj.soap" +
+                                ".SOAPDocumentImpl",
+                        "com.sun.org.apache.xerces.internal.dom" +
+                                ".DOMXSImplementationSourceImpl",
+                        "javax.wsdl.Types",
+                        "javax.wsdl.extensions.mime.MIMEPart",
+                        "com.sun.xml.bind.v2.runtime.BridgeContextImpl",
+                        "com.sun.xml.bind.v2.runtime.JAXBContextImpl",
+                        "com.sun.xml.bind.subclassReplacements",
+                        "com.sun.xml.bind.defaultNamespaceRemap",
+                        "com.sun.xml.bind.c14n",
+                        "com.sun.xml.bind.v2.model.annotation" +
+                                ".RuntimeAnnotationReader",
+                        "com.sun.xml.bind.XmlAccessorFactory",
+                        "com.sun.xml.bind.treatEverythingNillable",
+                        "com.sun.xml.bind.retainReferenceToInfo",
+                        "com.sun.xml.internal.bind.subclassReplacements",
+                        "com.sun.xml.internal.bind.defaultNamespaceRemap",
+                        "com.sun.xml.internal.bind.c14n",
+                        "org.apache.cxf.common.jaxb.SchemaCollectionContextProxy",
+                        "com.sun.xml.internal.bind.v2.model.annotation" +
+                                ".RuntimeAnnotationReader",
+                        "com.sun.xml.internal.bind.XmlAccessorFactory",
+                        "com.sun.xml.internal.bind.treatEverythingNillable",
+                        "com.sun.xml.bind.marshaller.CharacterEscapeHandler",
+                        "com.sun.xml.internal.bind.marshaller" +
+                                ".CharacterEscapeHandler",
+                        "com.sun.org.apache.xerces.internal.dom.ElementNSImpl",
+                        "sun.security.ssl.SSLLogger",
+                        "com.ibm.wsdl.extensions.schema.SchemaImpl",
+                        //TODO add refection only if soap 1.2
+                        "com.ibm.wsdl.extensions.soap12.SOAP12AddressImpl",
+                        "com.ibm.wsdl.extensions.soap12.SOAP12AddressSerializer",
+                        "com.ibm.wsdl.extensions.soap12.SOAP12BindingImpl",
+                        "com.ibm.wsdl.extensions.soap12.SOAP12BindingSerializer",
+                        "com.ibm.wsdl.extensions.soap12.SOAP12BodyImpl",
+                        "com.ibm.wsdl.extensions.soap12.SOAP12BodySerializer",
+                        "com.ibm.wsdl.extensions.soap12.SOAP12Constants",
+                        "com.ibm.wsdl.extensions.soap12.SOAP12FaultImpl",
+                        "com.ibm.wsdl.extensions.soap12.SOAP12FaultSerializer",
+                        "com.ibm.wsdl.extensions.soap12.SOAP12HeaderFaultImpl",
+                        "com.ibm.wsdl.extensions.soap12.SOAP12HeaderImpl",
+                        "com.ibm.wsdl.extensions.soap12.SOAP12HeaderSerializer",
+                        "com.ibm.wsdl.extensions.soap12.SOAP12OperationImpl",
+                        "com.ibm.wsdl.extensions.soap12.SOAP12OperationSerializer",
+                        "com.sun.xml.internal.bind.retainReferenceToInfo"));
         reflectiveItems.produce(new ReflectiveClassBuildItem(
                 false,
                 false,
@@ -1171,6 +1180,9 @@ class QuarkusCxfProcessor {
         Arrays.stream(beans).forEach(p::produce);
     }
 
+    /**
+     * Return all known classes implementing given class.
+     */
     private static Collection<ClassInfo> implementorsOf(
             IndexView index,
             String clazz) {
