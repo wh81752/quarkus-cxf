@@ -1,5 +1,11 @@
 package io.quarkiverse.cxf.deployment;
 
+import java.util.ArrayList;
+import java.util.List;
+
+import org.jboss.jandex.AnnotationValue;
+import org.jboss.jandex.ClassInfo;
+
 import io.quarkus.arc.deployment.AdditionalBeanBuildItem;
 import io.quarkus.arc.deployment.GeneratedBeanBuildItem;
 import io.quarkus.arc.deployment.UnremovableBeanBuildItem;
@@ -7,11 +13,6 @@ import io.quarkus.builder.item.MultiBuildItem;
 import io.quarkus.deployment.builditem.FeatureBuildItem;
 import io.quarkus.deployment.builditem.nativeimage.NativeImageProxyDefinitionBuildItem;
 import io.quarkus.deployment.builditem.nativeimage.ReflectiveClassBuildItem;
-import org.jboss.jandex.AnnotationValue;
-import org.jboss.jandex.ClassInfo;
-
-import java.util.ArrayList;
-import java.util.List;
 
 /**
  * A collective group of BuildItems around CXF WebService.
@@ -90,8 +91,7 @@ public final class CxfUeberBuildItem extends MultiBuildItem {
                     ws.wsNamespace,
                     ws.wsName,
                     ws.wrapperClassNames,
-                    ws.impl
-            );
+                    ws.impl);
             this.produce(item);
             this.produceAdditionalBean(ws.impl);
         } else {
@@ -101,8 +101,7 @@ public final class CxfUeberBuildItem extends MultiBuildItem {
                     ws.soapBinding,
                     ws.wsNamespace,
                     ws.wsName,
-                    ws.wrapperClassNames
-            );
+                    ws.wrapperClassNames);
             this.produce(item);
         }
         return this;
