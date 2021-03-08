@@ -2,9 +2,14 @@ package io.quarkiverse.cxf.deployment;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 
+import org.apache.cxf.Bus;
+import org.apache.cxf.BusFactory;
+import org.apache.cxf.common.spi.GeneratedClassClassLoaderCapture;
 import org.jboss.jandex.AnnotationValue;
 import org.jboss.jandex.ClassInfo;
+import org.jboss.logging.Logger;
 
 import io.quarkus.arc.deployment.AdditionalBeanBuildItem;
 import io.quarkus.arc.deployment.GeneratedBeanBuildItem;
@@ -112,28 +117,6 @@ public final class CxfUeberBuildItem extends MultiBuildItem {
             LOGGER.error("failed to load WS class : " + sei);
         } finally {
             // nothing
-    public CxfUeberBuildItem produceWebService(QuarkusCxfProcessor.WebServiceCxf ws) {
-        CxfWebServiceBuildItem item;
-        if (ws.hasImpl()) {
-            item = new CxfWebServiceBuildItem(
-                    ws.path,
-                    ws.sei,
-                    ws.soapBinding,
-                    ws.wsNamespace,
-                    ws.wsName,
-                    ws.wrapperClassNames,
-                    ws.impl);
-            this.produce(item);
-            this.produceAdditionalBean(ws.impl);
-        } else {
-            item = new CxfWebServiceBuildItem(
-                    ws.path,
-                    ws.sei,
-                    ws.soapBinding,
-                    ws.wsNamespace,
-                    ws.wsName,
-                    ws.wrapperClassNames);
-            this.produce(item);
         }
         return this;
     }
