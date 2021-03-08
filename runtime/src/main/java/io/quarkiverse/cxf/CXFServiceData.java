@@ -33,4 +33,39 @@ public class CXFServiceData {
         }
         return String.format("/%s", serviceName);
     }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o)
+            return true;
+        if (o == null || getClass() != o.getClass())
+            return false;
+        CXFServiceData that = (CXFServiceData) o;
+        return Objects.equals(clnames, that.clnames) && Objects.equals(
+                binding,
+                that.binding) && Objects.equals(impl, that.impl) && Objects.equals(path, that.path)
+                && Objects
+                        .equals(sei, that.sei)
+                && Objects.equals(wsName, that.wsName) && Objects.equals(
+                        wsNamespace,
+                        that.wsNamespace);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(clnames, binding, impl, path, sei, wsName, wsNamespace);
+    }
+
+    @Override
+    public String toString() {
+        return "CXFServiceData{" +
+                "clnames=" + clnames +
+                ", binding='" + binding + '\'' +
+                ", impl='" + impl + '\'' +
+                ", path='" + path + '\'' +
+                ", sei='" + sei + '\'' +
+                ", wsName='" + wsName + '\'' +
+                ", wsNamespace='" + wsNamespace + '\'' +
+                '}';
+    }
 }

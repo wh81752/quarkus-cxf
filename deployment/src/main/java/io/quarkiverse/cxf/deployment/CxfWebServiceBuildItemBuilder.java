@@ -1,7 +1,6 @@
 package io.quarkiverse.cxf.deployment;
 
 import static io.quarkiverse.cxf.deployment.QuarkusCxfProcessor.BINDING_TYPE_ANNOTATION;
-import static java.util.Collections.EMPTY_LIST;
 import static java.util.Optional.ofNullable;
 
 import java.lang.reflect.Modifier;
@@ -9,6 +8,8 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
 import java.util.Objects;
+
+import javax.xml.ws.soap.SOAPBinding;
 
 import org.jboss.jandex.AnnotationInstance;
 import org.jboss.jandex.AnnotationValue;
@@ -40,9 +41,12 @@ public class CxfWebServiceBuildItemBuilder {
     public CxfWebServiceBuildItemBuilder(AnnotationInstance ws) {
         Objects.requireNonNull(ws);
         this.ws = ws;
+        // Until we know better assume SOAP 1.1
+        this.soapBinding = SOAPBinding.SOAP11HTTP_BINDING;
         // Derive SEI's name from annotated class. You can override later once you
         // know better who the SEI really is.
         this.sei = this.wsClass().name().toString();
+        // Use SEI as publish adress for now.
         this.path = this.sei.toLowerCase();
         // Derive service name and namespace from given annotation class. Override
         // if you know better.
@@ -71,7 +75,9 @@ public class CxfWebServiceBuildItemBuilder {
     }
 
     public CxfWebServiceBuildItemBuilder withClassNames(@Nullable Collection<String> coll) {
-        this.classNames.addAll(ofNullable(coll).orElse(EMPTY_LIST));
+        final List<String> empty = new ArrayList<>();
+        Collection<String> lst = ofNullable(coll).orElse(empty);
+        this.classNames.addAll(lst);
         return this;
     }
 

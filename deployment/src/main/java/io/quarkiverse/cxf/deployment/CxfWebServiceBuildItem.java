@@ -1,8 +1,12 @@
 package io.quarkiverse.cxf.deployment;
 
-import java.util.List;
+import static java.util.Collections.*;
+import static java.util.Optional.ofNullable;
+
+import java.util.*;
 
 import org.jboss.jandex.AnnotationInstance;
+import org.wildfly.common.annotation.Nullable;
 
 import io.quarkiverse.cxf.CXFServiceData;
 import io.quarkus.builder.item.MultiBuildItem;
@@ -13,7 +17,7 @@ import io.quarkus.builder.item.MultiBuildItem;
  */
 public final class CxfWebServiceBuildItem extends MultiBuildItem {
     volatile public AnnotationInstance ws;
-    private final List<String> classNames;
+    private final List<String> classNames = new ArrayList<>();
     private final String implementor;
     private final String path;
     private final String sei;
@@ -28,16 +32,21 @@ public final class CxfWebServiceBuildItem extends MultiBuildItem {
             String soapBinding,
             String wsNamespace,
             String wsName,
-            List<String> classNames,
-            String implementor) {
+            @Nullable List<String> classNames,
+            @Nullable String implementor) {
+        Objects.requireNonNull(path);
+        Objects.requireNonNull(sei);
+        Objects.requireNonNull(soapBinding);
+        Objects.requireNonNull(wsNamespace);
+        Objects.requireNonNull(wsName);
+        this.classNames.addAll(Optional.of(classNames).orElse(EMPTY_LIST));
+        this.implementor = ofNullable(implementor).orElse("");
+        this.isClient = ofNullable(implementor).map(it -> false).orElse(true);
         this.path = path;
         this.sei = sei;
         this.soapBinding = soapBinding;
-        this.wsNamespace = wsNamespace;
         this.wsName = wsName;
-        this.classNames = classNames;
-        this.implementor = implementor;
-        this.isClient = false;
+        this.wsNamespace = wsNamespace;
     }
 
     public CxfWebServiceBuildItem(
@@ -47,14 +56,7 @@ public final class CxfWebServiceBuildItem extends MultiBuildItem {
             String wsNamespace,
             String wsName,
             List<String> classNames) {
-        this.path = path;
-        this.sei = sei;
-        this.soapBinding = soapBinding;
-        this.wsNamespace = wsNamespace;
-        this.wsName = wsName;
-        this.classNames = classNames;
-        this.isClient = true;
-        this.implementor = "";
+        this(path, sei, soapBinding, wsNamespace, wsName, classNames, null);
     }
 
     public String getPath() {
@@ -106,6 +108,7 @@ public final class CxfWebServiceBuildItem extends MultiBuildItem {
         CXFServiceData cxf = new CXFServiceData();
         cxf.binding = this.getSoapBinding();
         cxf.clnames.addAll(this.getClassNames());
+        cxf.impl = this.getImplementor();
         cxf.path = this.getPath();
         cxf.sei = this.getSei();
         cxf.wsName = this.getWsName();
