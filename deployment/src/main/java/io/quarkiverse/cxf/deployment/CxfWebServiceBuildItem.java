@@ -1,9 +1,12 @@
 package io.quarkiverse.cxf.deployment;
 
-import static java.util.Collections.*;
+import static java.util.Collections.unmodifiableList;
 import static java.util.Optional.ofNullable;
 
-import java.util.*;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Objects;
+import java.util.Optional;
 
 import org.jboss.jandex.AnnotationInstance;
 import org.wildfly.common.annotation.Nullable;
@@ -15,8 +18,10 @@ import io.quarkus.builder.item.MultiBuildItem;
  * CxfWebServiceBuildItem is instanciate for each SEI and each implementor it mean that if an interface have 2
  * implementors it generate 3 items (1 for client and 2 for implementors)
  */
+
 public final class CxfWebServiceBuildItem extends MultiBuildItem {
-    volatile public AnnotationInstance ws;
+    static private final List<String> EMPTY = unmodifiableList(new ArrayList<>());
+    private final AnnotationInstance ws;
     private final List<String> classNames = new ArrayList<>();
     private final String implementor;
     private final String path;
@@ -27,6 +32,7 @@ public final class CxfWebServiceBuildItem extends MultiBuildItem {
     private final boolean isClient;
 
     public CxfWebServiceBuildItem(
+            AnnotationInstance ws,
             String path,
             String sei,
             String soapBinding,
@@ -34,14 +40,16 @@ public final class CxfWebServiceBuildItem extends MultiBuildItem {
             String wsName,
             @Nullable List<String> classNames,
             @Nullable String implementor) {
+        Objects.requireNonNull(ws);
         Objects.requireNonNull(path);
         Objects.requireNonNull(sei);
         Objects.requireNonNull(soapBinding);
         Objects.requireNonNull(wsNamespace);
         Objects.requireNonNull(wsName);
-        this.classNames.addAll(Optional.of(classNames).orElse(EMPTY_LIST));
+        this.ws = ws;
+        this.classNames.addAll(Optional.of(classNames).orElse(EMPTY));
         this.implementor = ofNullable(implementor).orElse("");
-        this.isClient = ofNullable(implementor).map(it -> false).orElse(true);
+        this.isClient = (implementor == null);
         this.path = path;
         this.sei = sei;
         this.soapBinding = soapBinding;
@@ -49,14 +57,11 @@ public final class CxfWebServiceBuildItem extends MultiBuildItem {
         this.wsNamespace = wsNamespace;
     }
 
-    public CxfWebServiceBuildItem(
-            String path,
-            String sei,
-            String soapBinding,
-            String wsNamespace,
-            String wsName,
-            List<String> classNames) {
-        this(path, sei, soapBinding, wsNamespace, wsName, classNames, null);
+    /**
+     * Returns the original webservice annotation class this webservice items is derived from.
+     */
+    public AnnotationInstance getWs() {
+        return this.ws;
     }
 
     public String getPath() {
@@ -101,8 +106,6 @@ public final class CxfWebServiceBuildItem extends MultiBuildItem {
 
     /**
      * Convert all data into a runtime-value data structure that can be given to a Recorder instance for example.
-     *
-     * @return
      */
     public CXFServiceData asRuntimeData() {
         CXFServiceData cxf = new CXFServiceData();

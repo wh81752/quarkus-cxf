@@ -11,12 +11,12 @@ import io.quarkus.bootstrap.BootstrapDebug;
 import io.quarkus.gizmo.ClassOutput;
 
 /**
- * Class Documentation
+ * Simple bean recorder.
  *
  * <p>
- * What is the point of this class?
+ * Creates a GeneratedBeanBuildItem out of every class written to interface
+ * ClassOutput.
  *
- * @author geronimo1
  */
 public class GeneratedBeanRecorder implements ClassOutput {
     private final Collection<GeneratedBeanBuildItem> sink;
@@ -28,8 +28,7 @@ public class GeneratedBeanRecorder implements ClassOutput {
     }
 
     public GeneratedBeanRecorder(CxfUeberBuildItem cxf) {
-        this.sink = cxf.generatedBeans;
-        this.sources = BootstrapDebug.DEBUG_SOURCES_DIR != null ? new ConcurrentHashMap<>() : null;
+        this(cxf.generatedBeans);
     }
 
     public void write(

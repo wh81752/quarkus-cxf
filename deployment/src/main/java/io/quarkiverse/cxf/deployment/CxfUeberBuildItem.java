@@ -25,8 +25,6 @@ import io.quarkus.gizmo.ClassOutput;
  *
  * <p>
  * A single builditem containing all builditems necessary to produce webservices.
- *
- * @author wh81752
  */
 public final class CxfUeberBuildItem extends MultiBuildItem {
     public static final Logger LOGGER = Logger.getLogger(CxfUeberBuildItem.class);
@@ -39,62 +37,62 @@ public final class CxfUeberBuildItem extends MultiBuildItem {
     final public List<AdditionalBeanBuildItem> additionalBeans = new ArrayList<>();
     final public List<UnremovableBeanBuildItem> unremovableBeans = new ArrayList<>();
 
-    public CxfUeberBuildItem produceFeature() {
+    public CxfUeberBuildItem addFeatureCxF() {
         this.features.add(new FeatureBuildItem(QuarkusCxfProcessor.FEATURE_CXF));
         return this;
     }
 
-    public CxfUeberBuildItem produce(ReflectiveClassBuildItem item) {
+    public CxfUeberBuildItem additem(ReflectiveClassBuildItem item) {
         this.reflectiveClasss.add(item);
         return this;
     }
 
-    public CxfUeberBuildItem produceReflectiveClass(String clname) {
-        return this.produce(new ReflectiveClassBuildItem(true, true, clname));
+    public CxfUeberBuildItem addReflectiveClass(String clname) {
+        return this.additem(new ReflectiveClassBuildItem(true, true, clname));
     }
 
-    public CxfUeberBuildItem produceReflectiveClass(AnnotationValue clname) {
-        return this.produceReflectiveClass(clname.asString());
+    public CxfUeberBuildItem addReflectiveClass(AnnotationValue clname) {
+        return this.addReflectiveClass(clname.asString());
     }
 
-    public CxfUeberBuildItem produceReflectiveClass(ClassInfo clname) {
-        return this.produceReflectiveClass(clname.name().toString());
+    public CxfUeberBuildItem addReflectiveClass(ClassInfo clname) {
+        return this.addReflectiveClass(clname.name().toString());
     }
 
-    public CxfUeberBuildItem unremovable(String clname) {
-        return unremovable(new UnremovableBeanBuildItem.BeanClassNameExclusion(clname));
+    public CxfUeberBuildItem addUnremovable(String clname) {
+        return addUnremovable(new UnremovableBeanBuildItem.BeanClassNameExclusion(clname));
     }
 
-    public CxfUeberBuildItem unremovable(ClassInfo clname) {
-        return unremovable(clname.name().toString());
+    public CxfUeberBuildItem addUnremovable(ClassInfo clname) {
+        return addUnremovable(clname.name().toString());
     }
 
-    public CxfUeberBuildItem unremovable(UnremovableBeanBuildItem.BeanClassNameExclusion clname) {
+    public CxfUeberBuildItem addUnremovable(UnremovableBeanBuildItem.BeanClassNameExclusion clname) {
         this.unremovableBeans.add(new UnremovableBeanBuildItem(clname));
         return this;
     }
 
-    public CxfUeberBuildItem produceProxies(String... items) {
+    public CxfUeberBuildItem addProxies(String... items) {
         this.proxies.add(new NativeImageProxyDefinitionBuildItem(items));
         return this;
     }
 
-    public CxfUeberBuildItem produceAdditionalBean(String clname) {
+    public CxfUeberBuildItem addAdditionalBean(String clname) {
         this.additionalBeans.add(AdditionalBeanBuildItem.unremovableOf(clname));
         return this;
     }
 
-    public CxfUeberBuildItem produce(CxfWebServiceBuildItem item) {
+    public CxfUeberBuildItem additem(CxfWebServiceBuildItem item) {
         Objects.requireNonNull(item);
         this.cxfWebServices.add(item);
         if (item.hasImplementor()) {
-            this.produceAdditionalBean(item.getImplementor());
+            this.addAdditionalBean(item.getImplementor());
         }
         return this;
     }
 
-    public CxfUeberBuildItem produce(CxfWebServiceBuildItemBuilder item) {
-        return produce(item.build());
+    public CxfUeberBuildItem additem(CxfWebServiceBuildItemBuilder item) {
+        return additem(item.build());
     }
 
     public CxfUeberBuildItem capture(

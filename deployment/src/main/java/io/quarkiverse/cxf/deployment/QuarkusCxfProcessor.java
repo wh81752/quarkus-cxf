@@ -92,7 +92,7 @@ class QuarkusCxfProcessor {
     }
 
     /**
-     * This build step just consumes (intermediate) CxfUeberBuildItem in order to produce all relevant other items, like
+     * This build step just consumes (intermediate) CxfUeberBuildItems in order to produce all relevant other items, like
      * unremovable and additional Beans, proxies, features, reflective classes and so on.
      */
     @BuildStep
@@ -132,39 +132,41 @@ class QuarkusCxfProcessor {
         //
         // The provided feature.
         //
-        cxf.produceFeature();
+        cxf.addFeatureCxF();
 
+        //
         // Register package-infos for reflection
+        //
+
         index.getAnnotations(XML_NAMESPACE)
                 .stream()
                 .map(AnnotationInstance::target)
                 .map(AnnotationTarget::asClass)
-                .forEach(cxf::produceReflectiveClass);
+                .forEach(cxf::addReflectiveClass);
 
         //
         // produce reflective classes out of all known subclasses.
         //
+
         Stream.of(ABSTRACT_FEATURE, ABSTRACT_INTERCEPTOR, DATABINDING)
                 .map(index::getAllKnownSubclasses)
                 .flatMap(Collection::stream)
-                .forEach(cxf::produceReflectiveClass);
+                .forEach(cxf::addReflectiveClass);
 
         //TODO bad code it is set in loop but use outside...
 
         index.getAnnotations(WEBSERVICE_ANNOTATION)
                 .stream()
                 .filter(it -> it.target().kind() == AnnotationTarget.Kind.CLASS)
-                .map(annotation -> {
-                    return builder(annotation).withConfig(cxfBuildTimeConfig);
-                })
+                .map(annotation -> builder(annotation).withConfig(cxfBuildTimeConfig))
                 .peek(ws -> {
-                    cxf.produceReflectiveClass(ws.wsClass());
-                    cxf.unremovable(ws.wsClass());
+                    cxf.addReflectiveClass(ws.wsClass());
+                    cxf.addUnremovable(ws.wsClass());
                 })
                 .filter(CxfWebServiceBuildItemBuilder::isInterface)
                 .peek(ws -> {
 
-                    cxf.produceProxies(
+                    cxf.addProxies(
                             ws.wsClass().name().toString(),
                             "javax.xml.ws.BindingProvider",
                             "java.io.Closeable",
@@ -182,7 +184,7 @@ class QuarkusCxfProcessor {
                             .flatMap(Collection::stream)
                             .filter(Objects::nonNull)
                             .map(ai -> ai.value("className"))
-                            .forEach(cxf::produceReflectiveClass);
+                            .forEach(cxf::addReflectiveClass);
 
                 })
                 .forEach(ws -> {
@@ -209,15 +211,13 @@ class QuarkusCxfProcessor {
                         if (webserviceClient != null) {
                             client.withClientAnnotation(webserviceClient);
                         }
-                        cxf.produce(client);
+                        cxf.additem(client);
                     } else {
-                        cxf.produce(ws);
-                        implementors.forEach(wsClass -> {
-                            cxf.produce(builder(ws)
-                                    .withImplementor(wsClass)
-                                    .withBinding(wsClass)
-                                    .build());
-                        });
+                        cxf.additem(ws);
+                        implementors.forEach(wsClass -> cxf.additem(builder(ws)
+                                .withImplementor(wsClass)
+                                .withBinding(wsClass)
+                                .build()));
 
                     }
                 });
