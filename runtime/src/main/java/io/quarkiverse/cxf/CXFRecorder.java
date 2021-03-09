@@ -1,7 +1,11 @@
 package io.quarkiverse.cxf;
 
+import static java.util.stream.Collectors.toList;
+
 import java.util.*;
 import java.util.function.Supplier;
+import java.util.stream.Collector;
+import java.util.stream.Collectors;
 
 import org.jboss.logging.Logger;
 
@@ -25,7 +29,9 @@ public class CXFRecorder {
      * <p>
      * This method is called once per @WebService *interface*.
      */
-    public Supplier<CXFClientInfo> cxfClientInfoSupplier(CxfConfig cxfConfig, CXFServiceData wsdata) {
+    public Supplier<CXFClientInfo> cxfClientInfoSupplier(
+            CxfConfig cxfConfig,
+            CXFServiceData wsdata) {
         return this.cxfClientInfoSupplier(
                 cxfConfig,
                 wsdata.sei,
@@ -110,90 +116,60 @@ public class CXFRecorder {
         };
     }
 
-    static public class servletConfig {
-        public CxfEndpointConfig config;
-        public String path;
-
-        public servletConfig(
-                CxfEndpointConfig cxfEndPointConfig,
-                String relativePath) {
-            this.config = cxfEndPointConfig;
-            this.path = relativePath;
-        }
-    }
-
-    //    public void registerCXFServlet(
-    //            RuntimeValue<CXFServletInfos> runtimeInfos,
-    //            CxfConfig cxfConfig,
-    //            CXFServiceData data
-    //    ) {
-    //        this.registerCXFServlet(runtimeInfos.getValue(), cxfConfig, data);
-    //    }
-
-    private void registerCXFServlet(
-            CXFServletInfos infos,
-            CxfConfig cxfConfig,
-            CXFServiceData data) {
-        //
-        // Log how we are called.
-        //
-        if (LOGGER.isDebugEnabled()) {
-            String fmt = "registerCXFServlet: sei(%s), soapBinding(%s), path(%s), impl(%s), classes(%s)";
-            String msg = String.format(fmt, data.sei, data.binding, data.path, data.impl, data.clnames);
-            LOGGER.debug(msg);
-        }
-
-        // path --> servlet
-        Map<String, List<servletConfig>> implementorToCfg = new HashMap<>();
-
-        // iter over all configured endpoints
-        for (Map.Entry<String, CxfEndpointConfig> webServicesByPath : cxfConfig.endpoints.entrySet()) {
-            CxfEndpointConfig cxfEndPointConfig;
-            String relativePath;
-
-            cxfEndPointConfig = webServicesByPath.getValue();
-            relativePath = webServicesByPath.getKey();
-
-            String cfgImplementor = cxfEndPointConfig.implementor.orElse(null);
-            // this config has no implementor configured ..
-            if (cfgImplementor == null) {
-                continue;
-            }
-
-            List<servletConfig> lst;
-
-            // if implementor is already configured as servlet ..
-            if (implementorToCfg.containsKey(cfgImplementor)) {
-                lst = implementorToCfg.get(cfgImplementor);
-            } else {
-                lst = new ArrayList<>();
-                implementorToCfg.put(cfgImplementor, lst);
-            }
-
-            // something is wrong here ..
-            lst.add(new servletConfig(cxfEndPointConfig, relativePath));
-        }
-        List<servletConfig> cfgs = implementorToCfg.get(data.impl);
-        if (cfgs == null) {
-            cfgs = new ArrayList<>();
-            cfgs.add(new servletConfig(null, data.relativePath()));
-        }
-
-        for (servletConfig cfg : cfgs) {
-            infos.startRoute(data, cfg);
-        }
-    }
-
     public Handler<RoutingContext> registerServlet(
             String path,
             CxfConfig cxfConfig,
             BeanContainer beanContainer,
             Collection<CXFServiceData> wslist) {
-        CXFServletInfos infos = new CXFServletInfos(path);
-        wslist.forEach(it -> {
-            this.registerCXFServlet(infos, cxfConfig, it);
+        CxfHandler handler;
+        List<String> wrapperClasses;
+        List<CXFServletInfo> list = new ArrayList<>();
+
+        handler = new CxfHandler(path, beanContainer);
+        wrapperClasses = getWrappersclasses(wslist);
+
+        //
+        // wslist contains collected build-time data about webservices around.
+        //
+
+        wslist.stream()
+                .map(it -> it.toServlet(cxfConfig))
+                .flatMap(Collection::stream)
+                .forEach(list::add);
+
+        // All fine so far but servlets may clash by sharing the very same publish
+        // path. This is considered a show stoppper.
+
+        List<String> collisions;
+        Collector<CXFServletInfo, ?, Map<String, Long>> groupingBy;
+
+        groupingBy = Collectors.groupingBy(
+                CXFServletInfo::getRelativePath,
+                Collectors.counting());
+        collisions = list.stream()
+                .collect(groupingBy)
+                .entrySet()
+                .stream()
+                .filter(p -> p.getValue() > 1)
+                .map(Map.Entry::getKey)
+                .collect(toList());
+
+        if (!collisions.isEmpty()) {
+            throw new IllegalStateException("collisions detected for services: " + String.join(",", collisions));
+        }
+
+        // All fine by now, going ahead.
+        list.forEach(servlet -> {
+            handler.register(servlet, wrapperClasses);
         });
-        return new CxfHandler(infos, beanContainer);
+        return handler;
+    }
+
+    private static List<String> getWrappersclasses(Collection<CXFServiceData> wslist) {
+        return wslist.stream()
+                .map(data -> data.clnames)
+                .flatMap(List::stream)
+                .collect(toList());
     }
 
 }

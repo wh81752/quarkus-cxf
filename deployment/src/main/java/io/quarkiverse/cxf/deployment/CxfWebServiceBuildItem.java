@@ -8,7 +8,7 @@ import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 
-import org.jboss.jandex.AnnotationInstance;
+import org.jboss.jandex.ClassInfo;
 import org.wildfly.common.annotation.Nullable;
 
 import io.quarkiverse.cxf.CXFServiceData;
@@ -21,10 +21,9 @@ import io.quarkus.builder.item.MultiBuildItem;
 
 public final class CxfWebServiceBuildItem extends MultiBuildItem {
     static private final List<String> EMPTY = unmodifiableList(new ArrayList<>());
-    private final AnnotationInstance ws;
+    private final ClassInfo ws;
     private final List<String> classNames = new ArrayList<>();
     private final String implementor;
-    private final String path;
     private final String sei;
     private final String soapBinding;
     private final String wsName;
@@ -32,8 +31,7 @@ public final class CxfWebServiceBuildItem extends MultiBuildItem {
     private final boolean isClient;
 
     public CxfWebServiceBuildItem(
-            AnnotationInstance ws,
-            String path,
+            ClassInfo ws,
             String sei,
             String soapBinding,
             String wsNamespace,
@@ -41,7 +39,6 @@ public final class CxfWebServiceBuildItem extends MultiBuildItem {
             @Nullable List<String> classNames,
             @Nullable String implementor) {
         Objects.requireNonNull(ws);
-        Objects.requireNonNull(path);
         Objects.requireNonNull(sei);
         Objects.requireNonNull(soapBinding);
         Objects.requireNonNull(wsNamespace);
@@ -50,7 +47,6 @@ public final class CxfWebServiceBuildItem extends MultiBuildItem {
         this.classNames.addAll(Optional.of(classNames).orElse(EMPTY));
         this.implementor = ofNullable(implementor).orElse("");
         this.isClient = (implementor == null);
-        this.path = path;
         this.sei = sei;
         this.soapBinding = soapBinding;
         this.wsName = wsName;
@@ -60,12 +56,8 @@ public final class CxfWebServiceBuildItem extends MultiBuildItem {
     /**
      * Returns the original webservice annotation class this webservice items is derived from.
      */
-    public AnnotationInstance getWs() {
+    public ClassInfo getWs() {
         return this.ws;
-    }
-
-    public String getPath() {
-        return path;
     }
 
     public String getSei() {
@@ -112,7 +104,6 @@ public final class CxfWebServiceBuildItem extends MultiBuildItem {
         cxf.binding = this.getSoapBinding();
         cxf.clnames.addAll(this.getClassNames());
         cxf.impl = this.getImplementor();
-        cxf.path = this.getPath();
         cxf.sei = this.getSei();
         cxf.wsName = this.getWsName();
         cxf.wsNamespace = this.getWsNamespace();
@@ -120,7 +111,7 @@ public final class CxfWebServiceBuildItem extends MultiBuildItem {
 
     }
 
-    public static CxfWebServiceBuildItemBuilder builder(AnnotationInstance ws) {
+    public static CxfWebServiceBuildItemBuilder builder(ClassInfo ws) {
         return new CxfWebServiceBuildItemBuilder(ws);
     }
 

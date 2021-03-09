@@ -1,14 +1,12 @@
 package io.quarkiverse.cxf.deployment;
 
 import static io.quarkiverse.cxf.deployment.QuarkusCxfProcessor.BINDING_TYPE_ANNOTATION;
+import static io.quarkiverse.cxf.deployment.QuarkusCxfProcessor.WEBSERVICE_ANNOTATION;
 import static java.util.Collections.unmodifiableList;
 import static java.util.Optional.ofNullable;
 
 import java.lang.reflect.Modifier;
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.List;
-import java.util.Objects;
+import java.util.*;
 
 import javax.xml.ws.soap.SOAPBinding;
 
@@ -27,10 +25,9 @@ import org.wildfly.common.annotation.Nullable;
  */
 public class CxfWebServiceBuildItemBuilder {
     static private final List<String> EMPTY = unmodifiableList(new ArrayList<>());
-    public AnnotationInstance ws;
+    public ClassInfo ws;
     public List<String> classNames = new ArrayList<>();
     public String implementor = null;
-    public String path;
     public String sei;
     public String soapBinding;
     public String wsName;
@@ -43,20 +40,24 @@ public class CxfWebServiceBuildItemBuilder {
     /**
      * Derive a starter build item from a class annotated with @WebService.
      */
-    public CxfWebServiceBuildItemBuilder(AnnotationInstance ws) {
+    public CxfWebServiceBuildItemBuilder(ClassInfo ws) {
         Objects.requireNonNull(ws);
+        assertWebService(ws);
         this.ws = ws;
         // Until we know better assume SOAP 1.1
         this.soapBinding = SOAPBinding.SOAP11HTTP_BINDING;
         // Derive SEI's name from annotated class. You can override later once you
         // know better who the SEI really is.
-        this.sei = this.wsClass().name().toString();
-        // Use SEI as publish adress for now.
-        this.path = this.sei.toLowerCase();
+        this.sei = ws.name().toString();
         // Derive service name and namespace from given annotation class. Override
         // if you know better.
-        this.wsName = this.wsName();
+        this.wsName = ofNullable(wsName(this.ws)).orElse("");
         this.wsNamespace = this.wsNamespace();
+    }
+
+    static private void assertWebService(ClassInfo cl) {
+        Optional.ofNullable(cl.classAnnotation(WEBSERVICE_ANNOTATION))
+                .orElseThrow(() -> new IllegalArgumentException("not annotated as webservice: " + cl));
     }
 
     /**
@@ -66,7 +67,6 @@ public class CxfWebServiceBuildItemBuilder {
     public CxfWebServiceBuildItemBuilder(CxfWebServiceBuildItem ws) {
         this.ws = ws.getWs();
         this.withImpl(ws.getImplementor()).withClassNames(ws.getClassNames());
-        this.path = ws.getPath();
         this.sei = ws.getSei();
         this.soapBinding = ws.getSoapBinding();
         this.wsName = ws.getWsName();
@@ -87,7 +87,6 @@ public class CxfWebServiceBuildItemBuilder {
     public CxfWebServiceBuildItem build() {
         return new CxfWebServiceBuildItem(
                 this.ws,
-                this.path,
                 this.sei,
                 this.soapBinding,
                 this.wsNamespace,
@@ -123,7 +122,6 @@ public class CxfWebServiceBuildItemBuilder {
 
     public CxfWebServiceBuildItemBuilder withConfig(CxfBuildTimeConfig config) {
         Objects.requireNonNull(config);
-        this.path = ofNullable(config.path).orElse("/");
         return this;
     }
 
@@ -161,7 +159,7 @@ public class CxfWebServiceBuildItemBuilder {
     }
 
     public ClassInfo wsClass() {
-        return this.ws.target().asClass();
+        return this.ws;
     }
 
     public String wsPackage() {
@@ -178,7 +176,7 @@ public class CxfWebServiceBuildItemBuilder {
     }
 
     public boolean isInterface() {
-        return Modifier.isInterface(this.ws.target().asClass().flags());
+        return Modifier.isInterface(this.ws.flags());
     }
 
     //
@@ -214,11 +212,48 @@ public class CxfWebServiceBuildItemBuilder {
         return ai.value(name) != null ? ai.value(name).asString() : null;
     }
 
-    private static @Nullable String wsName(AnnotationInstance ai) {
-        return val(ai, "serviceName");
+    private static @Nullable String wsName(ClassInfo cl) {
+        return val(cl.classAnnotation(WEBSERVICE_ANNOTATION), "serviceName");
     }
 
-    private static @Nullable String wsNamespace(AnnotationInstance ai) {
-        return val(ai, "targetNamespace");
+    private static @Nullable String wsNamespace(ClassInfo cl) {
+        return val(cl.classAnnotation(WEBSERVICE_ANNOTATION), "targetNamespace");
+    }
+
+    @Override
+    public String toString() {
+        return "CxfWebServiceBuildItemBuilder{" +
+                "ws=" + ws +
+                ", classNames=" + classNames +
+                ", implementor='" + implementor + '\'' +
+                ", sei='" + sei + '\'' +
+                ", soapBinding='" + soapBinding + '\'' +
+                ", wsName='" + wsName + '\'' +
+                ", wsNamespace='" + wsNamespace + '\'' +
+                ", isClient=" + isClient +
+                '}';
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o)
+            return true;
+        if (o == null || getClass() != o.getClass())
+            return false;
+        CxfWebServiceBuildItemBuilder that = (CxfWebServiceBuildItemBuilder) o;
+        return isClient == that.isClient && Objects.equals(ws, that.ws) && Objects.equals(
+                classNames,
+                that.classNames) && Objects.equals(implementor, that.implementor) && Objects.equals(
+                        sei,
+                        that.sei)
+                && Objects.equals(soapBinding, that.soapBinding) && Objects.equals(
+                        wsName,
+                        that.wsName)
+                && Objects.equals(wsNamespace, that.wsNamespace);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(ws, classNames, implementor, sei, soapBinding, wsName, wsNamespace, isClient);
     }
 }

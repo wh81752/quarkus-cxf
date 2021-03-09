@@ -2,6 +2,8 @@ package io.quarkiverse.cxf.deployment;
 
 import static io.quarkiverse.cxf.deployment.CxfWebServiceBuildItem.builder;
 import static io.quarkus.vertx.http.deployment.RouteBuildItem.builder;
+import static java.lang.String.format;
+import static java.lang.String.join;
 import static java.util.Arrays.asList;
 import static java.util.stream.Collectors.toList;
 
@@ -92,8 +94,8 @@ class QuarkusCxfProcessor {
     }
 
     /**
-     * This build step just consumes (intermediate) CxfUeberBuildItems in order to produce all relevant other items, like
-     * unremovable and additional Beans, proxies, features, reflective classes and so on.
+     * This build step just consumes (intermediate) CxfUeberBuildItems in order to produce all relevant other items,
+     * like unremovable and additional Beans, proxies, features, reflective classes and so on.
      */
     @BuildStep
     public void produceCxfRelatedBuildItems(
@@ -153,74 +155,114 @@ class QuarkusCxfProcessor {
                 .flatMap(Collection::stream)
                 .forEach(cxf::addReflectiveClass);
 
-        //TODO bad code it is set in loop but use outside...
+        List<CxfWebServiceBuildItemBuilder> wsitems;
 
-        index.getAnnotations(WEBSERVICE_ANNOTATION)
+        List<ClassInfo> wsClasses;
+
+        //
+        // unconditionally get all classes annotated with @WebService.
+        //
+        wsClasses = index.getAnnotations(WEBSERVICE_ANNOTATION)
                 .stream()
-                .filter(it -> it.target().kind() == AnnotationTarget.Kind.CLASS)
-                .map(annotation -> builder(annotation).withConfig(cxfBuildTimeConfig))
-                .peek(ws -> {
-                    cxf.addReflectiveClass(ws.wsClass());
-                    cxf.addUnremovable(ws.wsClass());
-                })
-                .filter(CxfWebServiceBuildItemBuilder::isInterface)
-                .peek(ws -> {
+                .filter(it -> it.target()
+                        .kind() == AnnotationTarget.Kind.CLASS)
+                //                .map(annotation -> builder(annotation)
+                //                        .withConfig(cxfBuildTimeConfig))
+                .map(it -> it.target().asClass())
+                .collect(toList());
 
-                    cxf.addProxies(
-                            ws.wsClass().name().toString(),
-                            "javax.xml.ws.BindingProvider",
-                            "java.io.Closeable",
-                            "org.apache.cxf.endpoint.Client");
+        //
+        // reflective && unremovable
+        //
+        wsClasses.forEach(ws -> {
+            cxf.addReflectiveClass(ws);
+            cxf.addUnremovable(ws);
+        });
 
-                    //
-                    // Produce reflective classes for all annotaded classes
-                    //
-                    ws.wsClass()
-                            .methods()
-                            .stream()
-                            .map((MethodInfo mi) -> asList(
-                                    mi.annotation(REQUEST_WRAPPER_ANNOTATION),
-                                    mi.annotation(RESPONSE_WRAPPER_ANNOTATION)))
-                            .flatMap(Collection::stream)
-                            .filter(Objects::nonNull)
-                            .map(ai -> ai.value("className"))
-                            .forEach(cxf::addReflectiveClass);
+        //
+        // proxy
+        //
+        cxf.addProxies(
+                "javax.xml.ws.BindingProvider",
+                "java.io.Closeable",
+                "org.apache.cxf.endpoint.Client");
 
-                })
+        wsClasses.stream()
+                .filter(ws -> Modifier.isInterface(ws.flags()))
                 .forEach(ws -> {
-                    //List<String> wrapperClassNames = new ArrayList<>();
-
-                    // TODO: Perhaps not correct -> wrapper classes are not known.
-                    cxf.capture(ws.sei);
-
-                    Collection<ClassInfo> implementors = implementorsOf(index, ws.sei);
-
-                    //TODO add soap1.2 in config file
-                    //if no implementor, it mean it is client
-                    if (implementors == null || implementors.isEmpty()) {
-                        // make new WebServiceCxf to keep things seperated from original.
-                        CxfWebServiceBuildItemBuilder client = builder(ws.build());
-                        client.path = cxfBuildTimeConfig.path;
-
-                        generateCxfClientProducer(cxf, client.sei);
-
-                        AnnotationInstance webserviceClient = findWebServiceClientAnnotation(
-                                index,
-                                client.wsClass().name());
-
-                        if (webserviceClient != null) {
-                            client.withClientAnnotation(webserviceClient);
-                        }
-                        cxf.additem(client);
-                    } else {
-                        cxf.additem(ws);
-                        implementors.forEach(wsClass -> cxf.additem(builder(ws)
-                                .withImplementor(wsClass)
-                                .withBinding(wsClass)
-                                .build()));
-
-                    }
+                    cxf.addProxies(ws.name().toString());
                 });
+
+        //
+        // Reflective classes by method annotations
+        //
+        wsClasses.stream()
+                .filter(ws -> Modifier.isInterface(ws.flags()))
+                .map(ws -> {
+                    return ws.methods();
+                })
+                .flatMap(Collection::stream)
+                .map(mi -> asList(
+                        mi.annotation(REQUEST_WRAPPER_ANNOTATION),
+                        mi.annotation(RESPONSE_WRAPPER_ANNOTATION)))
+                .flatMap(Collection::stream)
+                .filter(Objects::nonNull)
+                .map(ai -> ai.value("className"))
+                .forEach(cxf::addReflectiveClass);
+
+        //
+        // Capture SEI classes.
+        //
+        wsClasses.stream()
+                .filter(ws -> Modifier.isInterface(ws.flags()))
+                .map(ws -> ws.name().toString())
+                .forEach(sei -> {
+                    cxf.capture(sei);
+                });
+
+        //
+        // Separate interface only classes (this are the clients).
+        //
+        wsClasses.stream()
+                .filter(ws -> Modifier.isInterface(ws.flags()))
+                .filter(ws -> {
+                    Collection<ClassInfo> implementors;
+                    implementors = implementorsOf(index, ws.name().toString());
+                    return implementors == null || implementors.isEmpty();
+                })
+                .map(ws -> {
+
+                    CxfWebServiceBuildItemBuilder client;
+
+                    generateCxfClientProducer(cxf, ws.name().toString());
+
+                    AnnotationInstance webserviceClient;
+                    webserviceClient = findWebServiceClientAnnotation(index, ws.name());
+
+                    client = builder(ws);
+                    if (webserviceClient != null) {
+                        client.withClientAnnotation(webserviceClient);
+                    }
+                    return client;
+                })
+                .forEach(item -> cxf.additem(item));
+
+        //
+        // handle implementation classes
+        //
+        wsClasses.stream()
+                .filter(ws -> Modifier.isInterface(ws.flags()))
+                .map(sei -> {
+                    LOGGER.debug(format("looking for implementors of SEI %s ..", sei));
+                    Collection<ClassInfo> classInfos = implementorsOf(index, sei.name().toString());
+                    List<String> impls = classInfos.stream().map(c -> c.name().toString()).collect(toList());
+                    LOGGER.debug(format("implementors of SEI %s: %s", sei, join(",", impls)));
+                    return classInfos.stream().map(impl -> builder(sei).withImplementor(impl)).collect(toList());
+                })
+                .flatMap(Collection::stream)
+                .peek(ws -> {
+                    LOGGER.debug(format("producing webservice %s", ws));
+                }).forEach(item -> cxf.additem(item));
 
         //
         // eventually produce my items for consumption.
@@ -319,7 +361,7 @@ class QuarkusCxfProcessor {
 
         // Note: There is just one route for all CXF webservices. Let's log it to
         // to inform developer what's going on.
-        LOGGER.info(String.format("*** route for all WS services: route(%s)", getMappingPath(routepath)));
+        LOGGER.info(format("*** route for all WS services: route(%s)", getMappingPath(routepath)));
         routes.produce(route);
     }
 
@@ -344,7 +386,7 @@ class QuarkusCxfProcessor {
                 .map(CxfWebServiceBuildItem::asRuntimeData)
                 .map(cxf -> {
                     String fmt = "producing CXF client bean named '%s' for SEI %s";
-                    String msg = String.format(fmt, cxf.sei, cxf.sei);
+                    String msg = format(fmt, cxf.sei, cxf.sei);
                     LOGGER.info(msg);
                     return SyntheticBeanBuildItem
                             .configure(CXFClientInfo.class)

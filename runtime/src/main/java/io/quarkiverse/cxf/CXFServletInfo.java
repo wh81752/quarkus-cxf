@@ -2,13 +2,16 @@ package io.quarkiverse.cxf;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
+import java.util.Optional;
 
 import org.jboss.logging.Logger;
 import org.wildfly.common.annotation.Nullable;
 
 public class CXFServletInfo {
+    private static final Logger LOGGER = Logger.getLogger(CXFServletInfo.class);
+    public static final String ROOTPATH = "/";
     private final String relativePath;
-    private final String path;
     private final String className;
     private final List<String> inInterceptors = new ArrayList<>();
     private final List<String> outInterceptors = new ArrayList<>();
@@ -21,15 +24,12 @@ public class CXFServletInfo {
     private final List<String> wrapperClassNames;
     private final String endpointUrl;
 
-    private static final Logger LOGGER = Logger.getLogger(CXFServletInfo.class);
-
     public CXFServletInfo(
             CXFServiceData data,
-            CxfEndpointConfig cfg,
-            String relativePath) {
+            @Nullable CxfEndpointConfig cfg,
+            @Nullable String relativePath) {
         super();
-        this.path = data.path;
-        this.relativePath = relativePath;
+        this.relativePath = Optional.ofNullable(relativePath).orElse(ROOTPATH);
         this.className = data.impl;
         this.sei = data.sei;
         this.wsdlPath = cfg != null ? cfg.wsdlPath.orElse(null) : null;
@@ -39,8 +39,11 @@ public class CXFServletInfo {
         this.with(cfg);
     }
 
+    public CXFServletInfo(CXFServiceData data) {
+        this(data, null, ROOTPATH);
+    }
+
     public CXFServletInfo(
-            String path,
             String relativePath,
             String className,
             String sei,
@@ -49,7 +52,6 @@ public class CXFServletInfo {
             List<String> wrapperClassNames,
             String endpointUrl) {
         super();
-        this.path = path;
         this.relativePath = relativePath;
         this.className = className;
         this.sei = sei;
@@ -61,10 +63,6 @@ public class CXFServletInfo {
 
     public String getClassName() {
         return className;
-    }
-
-    public String getPath() {
-        return path;
     }
 
     public String getRelativePath() {
@@ -111,11 +109,6 @@ public class CXFServletInfo {
         return endpointUrl;
     }
 
-    @Override
-    public String toString() {
-        return "Web Service " + className + " on " + path;
-    }
-
     public CXFServletInfo with(@Nullable CxfEndpointConfig cfg) {
         if (cfg != null) {
             if (cfg.inInterceptors.isPresent()) {
@@ -135,5 +128,67 @@ public class CXFServletInfo {
             }
         }
         return this;
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o)
+            return true;
+        if (o == null || getClass() != o.getClass())
+            return false;
+        CXFServletInfo that = (CXFServletInfo) o;
+        return Objects.equals(relativePath, that.relativePath) && Objects.equals(
+                className,
+                that.className) && Objects.equals(inInterceptors, that.inInterceptors)
+                && Objects.equals(
+                        outInterceptors,
+                        that.outInterceptors)
+                && Objects.equals(outFaultInterceptors, that.outFaultInterceptors) && Objects.equals(
+                        inFaultInterceptors,
+                        that.inFaultInterceptors)
+                && Objects.equals(features, that.features) && Objects.equals(
+                        sei,
+                        that.sei)
+                && Objects.equals(wsdlPath, that.wsdlPath) && Objects.equals(
+                        soapBinding,
+                        that.soapBinding)
+                && Objects.equals(wrapperClassNames, that.wrapperClassNames) && Objects.equals(
+                        endpointUrl,
+                        that.endpointUrl);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(
+                relativePath,
+                className,
+                inInterceptors,
+                outInterceptors,
+                outFaultInterceptors,
+                inFaultInterceptors,
+                features,
+                sei,
+                wsdlPath,
+                soapBinding,
+                wrapperClassNames,
+                endpointUrl);
+    }
+
+    @Override
+    public String toString() {
+        return "CXFServletInfo{" +
+                "relativePath='" + relativePath + '\'' +
+                ", className='" + className + '\'' +
+                ", inInterceptors=" + inInterceptors +
+                ", outInterceptors=" + outInterceptors +
+                ", outFaultInterceptors=" + outFaultInterceptors +
+                ", inFaultInterceptors=" + inFaultInterceptors +
+                ", features=" + features +
+                ", sei='" + sei + '\'' +
+                ", wsdlPath='" + wsdlPath + '\'' +
+                ", soapBinding='" + soapBinding + '\'' +
+                ", wrapperClassNames=" + wrapperClassNames +
+                ", endpointUrl='" + endpointUrl + '\'' +
+                '}';
     }
 }
