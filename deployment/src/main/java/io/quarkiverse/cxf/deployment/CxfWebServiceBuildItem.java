@@ -8,7 +8,6 @@ import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 
-import org.jboss.jandex.ClassInfo;
 import org.wildfly.common.annotation.Nullable;
 
 import io.quarkiverse.cxf.CXFServiceData;
@@ -21,31 +20,27 @@ import io.quarkus.builder.item.MultiBuildItem;
 
 public final class CxfWebServiceBuildItem extends MultiBuildItem {
     static private final List<String> EMPTY = unmodifiableList(new ArrayList<>());
-    private final ClassInfo ws;
     private final List<String> classNames = new ArrayList<>();
-    private final String implementor;
-    private final String sei;
+    private final Implementor implementor;
+    private final SEI sei;
     private final String soapBinding;
     private final String wsName;
     private final String wsNamespace;
     private final boolean isClient;
 
     public CxfWebServiceBuildItem(
-            ClassInfo ws,
-            String sei,
+            SEI sei,
             String soapBinding,
             String wsNamespace,
             String wsName,
             @Nullable List<String> classNames,
-            @Nullable String implementor) {
-        Objects.requireNonNull(ws);
+            @Nullable Implementor implementor) {
         Objects.requireNonNull(sei);
         Objects.requireNonNull(soapBinding);
         Objects.requireNonNull(wsNamespace);
         Objects.requireNonNull(wsName);
-        this.ws = ws;
         this.classNames.addAll(Optional.of(classNames).orElse(EMPTY));
-        this.implementor = ofNullable(implementor).orElse("");
+        this.implementor = ofNullable(implementor).orElse(null);
         this.isClient = (implementor == null);
         this.sei = sei;
         this.soapBinding = soapBinding;
@@ -53,14 +48,7 @@ public final class CxfWebServiceBuildItem extends MultiBuildItem {
         this.wsNamespace = wsNamespace;
     }
 
-    /**
-     * Returns the original webservice annotation class this webservice items is derived from.
-     */
-    public ClassInfo getWs() {
-        return this.ws;
-    }
-
-    public String getSei() {
+    public SEI getSei() {
         return sei;
     }
 
@@ -80,7 +68,7 @@ public final class CxfWebServiceBuildItem extends MultiBuildItem {
         return wsNamespace;
     }
 
-    public String getImplementor() {
+    public Implementor getImplementor() {
         return implementor;
     }
 
@@ -93,7 +81,7 @@ public final class CxfWebServiceBuildItem extends MultiBuildItem {
     }
 
     public boolean hasImplementor() {
-        return this.implementor != null && !this.implementor.isEmpty() && !(this.implementor.trim().isEmpty());
+        return this.implementor != null;
     }
 
     /**
@@ -103,24 +91,24 @@ public final class CxfWebServiceBuildItem extends MultiBuildItem {
         CXFServiceData cxf = new CXFServiceData();
         cxf.binding = this.getSoapBinding();
         cxf.clnames.addAll(this.getClassNames());
-        cxf.impl = this.getImplementor();
-        cxf.sei = this.getSei();
+        cxf.impl = ofNullable(this.getImplementor()).map(impl -> impl.classInfo.name().toString()).orElse(null);
+        cxf.sei = this.getSei().classInfo.name().toString();
         cxf.wsName = this.getWsName();
         cxf.wsNamespace = this.getWsNamespace();
         return cxf;
 
     }
 
-    public static CxfWebServiceBuildItemBuilder builder(ClassInfo ws) {
+    public static CxfWebServiceBuildItemBuilder builder(SEI ws) {
         return new CxfWebServiceBuildItemBuilder(ws);
     }
 
-    public static CxfWebServiceBuildItemBuilder builder(CxfWebServiceBuildItem ws) {
-        return new CxfWebServiceBuildItemBuilder(ws);
-    }
-
-    public static CxfWebServiceBuildItemBuilder builder(CxfWebServiceBuildItemBuilder ws) {
-        return new CxfWebServiceBuildItemBuilder(ws.build());
-    }
+    //    public static CxfWebServiceBuildItemBuilder builder(CxfWebServiceBuildItem ws) {
+    //        return new CxfWebServiceBuildItemBuilder(ws);
+    //    }
+    //
+    //    public static CxfWebServiceBuildItemBuilder builder(CxfWebServiceBuildItemBuilder ws) {
+    //        return new CxfWebServiceBuildItemBuilder(ws.build());
+    //    }
 
 }

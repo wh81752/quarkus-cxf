@@ -82,6 +82,10 @@ public final class CxfUeberBuildItem extends MultiBuildItem {
         return this;
     }
 
+    public CxfUeberBuildItem addAdditionalBean(Implementor clname) {
+        return this.addAdditionalBean(clname.classInfo.name().toString());
+    }
+
     public CxfUeberBuildItem additem(CxfWebServiceBuildItem item) {
         Objects.requireNonNull(item);
         this.cxfWebServices.add(item);
@@ -96,7 +100,11 @@ public final class CxfUeberBuildItem extends MultiBuildItem {
     }
 
     public CxfUeberBuildItem capture(
-            String sei) {
+            ClassInfo sei) {
+        return capture(sei.name().toString());
+    }
+
+    public CxfUeberBuildItem capture(String sei) {
         List<String> wrapperClassNames = new ArrayList<>();
         ClassOutput classOutput = new GeneratedBeanRecorder(this);
         QuarkusCapture c = new QuarkusCapture(classOutput);

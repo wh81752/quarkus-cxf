@@ -14,9 +14,9 @@ public class DevConsoleProcessor {
         DevCxfInfos cxfInfos = new DevCxfInfos();
         for (CxfWebServiceBuildItem webservice : webservices) {
             if (webservice.IsClient()) {
-                cxfInfos.addClient(webservice.getSei());
+                cxfInfos.addClient(webservice.getSei().classInfo.name().toString());
             } else {
-                cxfInfos.addService(webservice.getImplementor());
+                cxfInfos.addService(webservice.getImplementor().classInfo.name().toString());
             }
         }
         return new DevConsoleTemplateInfoBuildItem("cxfInfos", cxfInfos);

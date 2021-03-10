@@ -215,54 +215,54 @@ class QuarkusCxfProcessor {
         //
         wsClasses.stream()
                 .filter(ws -> Modifier.isInterface(ws.flags()))
-                .map(ws -> ws.name().toString())
-                .forEach(sei -> {
-                    cxf.capture(sei);
-                });
+                .forEach(cxf::capture);
 
         //
         // Separate interface only classes (this are the clients).
         //
         wsClasses.stream()
                 .filter(ws -> Modifier.isInterface(ws.flags()))
+                .map(SEI::new)
                 .filter(ws -> {
                     Collection<ClassInfo> implementors;
-                    implementors = implementorsOf(index, ws.name().toString());
+                    implementors = implementorsOf(index, ws);
                     return implementors == null || implementors.isEmpty();
                 })
                 .map(ws -> {
 
+                    AnnotationInstance webserviceClient;
                     CxfWebServiceBuildItemBuilder client;
 
-                    generateCxfClientProducer(cxf, ws.name().toString());
-
-                    AnnotationInstance webserviceClient;
-                    webserviceClient = findWebServiceClientAnnotation(index, ws.name());
+                    generateCxfClientProducer(cxf, ws);
 
                     client = builder(ws);
+                    webserviceClient = findWebServiceClientAnnotation(index, ws);
                     if (webserviceClient != null) {
                         client.withClientAnnotation(webserviceClient);
                     }
                     return client;
                 })
-                .forEach(item -> cxf.additem(item));
+                .forEach(cxf::additem);
 
         //
         // handle implementation classes
         //
         wsClasses.stream()
                 .filter(ws -> Modifier.isInterface(ws.flags()))
+                .map(SEI::new)
                 .map(sei -> {
                     LOGGER.debug(format("looking for implementors of SEI %s ..", sei));
-                    Collection<ClassInfo> classInfos = implementorsOf(index, sei.name().toString());
+                    Collection<ClassInfo> classInfos = implementorsOf(index, sei);
                     List<String> impls = classInfos.stream().map(c -> c.name().toString()).collect(toList());
                     LOGGER.debug(format("implementors of SEI %s: %s", sei, join(",", impls)));
-                    return classInfos.stream().map(impl -> builder(sei).withImplementor(impl)).collect(toList());
+                    return classInfos.stream()
+                            .map(impl -> new Implementor(impl))
+                            .map(impl -> builder(sei).withImplementor(impl)).collect(toList());
                 })
                 .flatMap(Collection::stream)
                 .peek(ws -> {
                     LOGGER.debug(format("producing webservice %s", ws));
-                }).forEach(item -> cxf.additem(item));
+                }).forEach(cxf::additem);
 
         //
         // eventually produce my items for consumption.
@@ -1131,6 +1131,18 @@ class QuarkusCxfProcessor {
 
     private AnnotationInstance findWebServiceClientAnnotation(
             IndexView index,
+            SEI sei) {
+        return findWebServiceClientAnnotation(index, sei.classInfo);
+    }
+
+    private AnnotationInstance findWebServiceClientAnnotation(
+            IndexView index,
+            ClassInfo seiName) {
+        return findWebServiceClientAnnotation(index, seiName.name());
+    }
+
+    private AnnotationInstance findWebServiceClientAnnotation(
+            IndexView index,
             DotName seiName) {
         Collection<AnnotationInstance> annotations = index.getAnnotations(WEBSERVICE_CLIENT);
         for (AnnotationInstance annotation : annotations) {
@@ -1210,6 +1222,18 @@ class QuarkusCxfProcessor {
         }
     }
 
+    private void generateCxfClientProducer(
+            CxfUeberBuildItem cxf,
+            ClassInfo clazz) {
+        generateCxfClientProducer(cxf, clazz.name().toString());
+    }
+
+    private void generateCxfClientProducer(
+            CxfUeberBuildItem cxf,
+            SEI sei) {
+        generateCxfClientProducer(cxf, sei.classInfo);
+    }
+
     @SafeVarargs
     static private <T> Set<T> asSet(T... items) {
         return Arrays.stream(items).collect(Collectors.toSet());
@@ -1228,7 +1252,25 @@ class QuarkusCxfProcessor {
     private static Collection<ClassInfo> implementorsOf(
             IndexView index,
             String clazz) {
-        return index.getAllKnownImplementors(DotName.createSimple(clazz));
+        return implementorsOf(index, DotName.createSimple(clazz));
+    }
+
+    private static Collection<ClassInfo> implementorsOf(
+            IndexView index,
+            ClassInfo clazz) {
+        return implementorsOf(index, clazz.name());
+    }
+
+    private static Collection<ClassInfo> implementorsOf(
+            IndexView index,
+            SEI sei) {
+        return implementorsOf(index, sei.classInfo);
+    }
+
+    private static Collection<ClassInfo> implementorsOf(
+            IndexView index,
+            DotName clazz) {
+        return index.getAllKnownImplementors(clazz);
     }
 
 }
