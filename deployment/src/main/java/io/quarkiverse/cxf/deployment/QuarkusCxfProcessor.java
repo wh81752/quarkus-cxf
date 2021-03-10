@@ -1,10 +1,11 @@
 package io.quarkiverse.cxf.deployment;
 
 import static io.quarkiverse.cxf.deployment.CxfWebServiceBuildItem.builder;
+import static io.quarkiverse.cxf.deployment.CxfWebServiceBuildItem.implbuilder;
 import static io.quarkus.vertx.http.deployment.RouteBuildItem.builder;
 import static java.lang.String.format;
-import static java.lang.String.join;
 import static java.util.Arrays.asList;
+import static java.util.stream.Collectors.joining;
 import static java.util.stream.Collectors.toList;
 
 import java.io.BufferedReader;
@@ -251,13 +252,18 @@ class QuarkusCxfProcessor {
                 .filter(ws -> Modifier.isInterface(ws.flags()))
                 .map(SEI::new)
                 .map(sei -> {
-                    LOGGER.debug(format("looking for implementors of SEI %s ..", sei));
-                    Collection<ClassInfo> classInfos = implementorsOf(index, sei);
-                    List<String> impls = classInfos.stream().map(c -> c.name().toString()).collect(toList());
-                    LOGGER.debug(format("implementors of SEI %s: %s", sei, join(",", impls)));
-                    return classInfos.stream()
-                            .map(impl -> new Implementor(impl))
-                            .map(impl -> builder(sei).withImplementor(impl)).collect(toList());
+                    List<CxfWebServiceBuildItemBuilder> impls = implementorsOf(index, sei)
+                            .stream()
+                            .map(Implementor::new)
+                            .map(impl -> implbuilder(impl, sei))
+                            .collect(toList());
+
+                    // Log who's implementing this SEI
+                    LOGGER.debug(format(
+                            "implementors of %s: %s",
+                            sei,
+                            impls.stream().map(CxfWebServiceBuildItemBuilder::toString).collect(joining(","))));
+                    return impls;
                 })
                 .flatMap(Collection::stream)
                 .peek(ws -> {
@@ -302,28 +308,14 @@ class QuarkusCxfProcessor {
         //
 
         if (services.isEmpty()) {
-            LOGGER.debug("no webservices defined, not setting up servlet.");
+            LOGGER.warn("no webservices defined, not setting up servlet.");
             return;
         }
-
-        //
-        // Mysterious: Get a Servlet path.
-        //
 
         // Changed:
         // Derive (servlet path / vert.x route) from build-time config rather from
         // runtime config.
         String routepath = cxfBuildTimeConfig.path;
-
-        //        routepath = services.stream()
-        //                .map(service -> service.path)
-        //                .filter(Objects::nonNull)
-        //                .filter(it -> !it.isEmpty()).findAny()
-        //                .orElse(null);
-        //
-        //        if (routepath == null) {
-        //            throw new IllegalStateException("path is not defined.");
-        //        }
 
         //
         // Create a VERTX handler for CXF services and mount it at route.
@@ -335,33 +327,15 @@ class QuarkusCxfProcessor {
         // Here we get a VERTX handler from our recorder. A vertx handler is the main interface.
         // It's about how to handle a vertex event. Such an event is a HTTP request represented
         // by an instance of class RoutingContext.
-        //
-        // Question(s):
-        // Q1: why do we need to receive such a handler here?
-        // Q2: why do we need to produce something?
         handler = recorder.registerServlet(routepath, cxfConfig, beanContainer.getValue(), services);
         route = builder()
                 .route(getMappingPath(routepath))
                 .handler(handler)
                 .handlerType(HandlerType.BLOCKING)
                 .build();
-        // A2: Here we tell VERTX that we have a HTTP=Request handler. We inform VERTX the quarkus
-        // way: Just lookup the build-items VERTX consumes (see https://quarkus.io/guides/all-builditems)
-        // and you endup with this one:
-        // https://github.com/quarkusio/quarkus/blob/master/extensions/vertx-http/deployment/src/main/java/io/quarkus
-        // /vertx/http/deployment/RouteBuildItem.java
-        // The core concept of VERT.x WEB goes like this:
-        // 1. Provide a route and a handler. Then, on an incoming request,..
-        // 2. VERT.x tries in order all routes, the first matching one wins,
-        // 3. and the associated handler is applied. The handler then does
-        // 4. something and ..
-        // 5. eventually ends the request ; or
-        // 6. continues handling by doing nothing => next handler (iff available)
-        // 7. starts handling.
-
         // Note: There is just one route for all CXF webservices. Let's log it to
         // to inform developer what's going on.
-        LOGGER.info(format("*** route for all WS services: route(%s)", getMappingPath(routepath)));
+        LOGGER.debug(format("route for all WS services: %s", getMappingPath(routepath)));
         routes.produce(route);
     }
 

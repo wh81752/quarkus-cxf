@@ -1,11 +1,12 @@
 package io.quarkiverse.cxf;
 
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Map;
-import java.util.Objects;
+import static java.lang.String.format;
+import static java.util.Optional.ofNullable;
+
+import java.util.*;
 
 import org.jboss.logging.Logger;
+import org.wildfly.common.annotation.Nullable;
 
 /**
  * Class Documentation
@@ -25,6 +26,7 @@ public class CXFServiceData {
     public String sei;
     public String wsName;
     public String wsNamespace;
+    public @Nullable String serviceName;
 
     public boolean hasImpl() {
         return this.impl != null && !this.impl.equals("");
@@ -36,7 +38,7 @@ public class CXFServiceData {
         if (serviceName.contains(".")) {
             serviceName = serviceName.substring(serviceName.lastIndexOf('.') + 1);
         }
-        return String.format("/%s", serviceName);
+        return format("/%s", serviceName);
     }
 
     /**
@@ -44,14 +46,6 @@ public class CXFServiceData {
      */
     public List<CXFServletInfo> toServlet(CxfConfig cxfConfig) {
         final List<CXFServletInfo> services = new ArrayList<>();
-        //
-        // Log how we are called.
-        //
-        if (LOGGER.isDebugEnabled()) {
-            String fmt = "sei(%s), soapBinding(%s), impl(%s), classes(%s)";
-            String msg = String.format(fmt, this.sei, this.binding, this.impl, this.clnames);
-            LOGGER.debug(msg);
-        }
 
         List<Map.Entry<String, CxfEndpointConfig>> matching = new ArrayList<>();
         //
@@ -67,56 +61,6 @@ public class CXFServiceData {
             cxfEndPointConfig = kv.getValue();
 
             //
-            //
-            // quarkus.cxf.endpoint."{wsid}".implementor=
-            // quarkus.cxf.endpoint."{wsid}".path=
-            //
-            // (A)
-            // If .implementor is present while .path not, then {wsid} is assumed to be
-            // the relpath => .path is constructed out of {wsid}.
-            //
-            // (B)
-            // If .implementor and .path is present then {wsid} is nothing else than a
-            // grouping id and not used for any further calculations.
-            //
-            // (C)
-            // If .implementor is absent -- regardless of .path -- then {wsid} is considered
-            // to be the webservice implementation class. If the path is absent, then
-            // the implementation class is used as .path.
-            //
-            // Examples:
-            // (A)
-            // quarkus.cxf.endpoint."hw".implementor=io.app.ws.HelloWorldImpl
-            // quarkus.cxf.endpoint."hw".path=null
-            //
-            // @WebService() class HelloWorldImpl {} => .path("/hw")
-            // @WebService(serviceName=myhw) class HelloWorldImpl {} => .path("/myhw")
-            //
-            // (B)
-            // quarkus.cxf.endpoint."hw".implementor=io.app.ws.HelloWorldImpl
-            // quarkus.cxf.endpoint."hw".path=/foobar
-            //
-            // configuration wins in any case:
-            // @WebService() class HelloWorldImpl {} => .path("/foobar")
-            // @WebService(serviceName=myhw) class HelloWorldImpl {} => .path("/foobar")
-            //
-            // (C1)
-            // quarkus.cxf.endpoint."hw".implementor=null
-            // => error: hw not a implementor class
-            //
-            // (C2)
-            // quarkus.cxf.endpoint."io.app.ws.HelloWorldImpl".implementor=null
-            // quarkus.cxf.endpoint."io.app.ws.HelloWorldImpl".path=/foobar
-            // @WebService(serviceName=myhw) class HelloWorldImpl {} => .path("/foobar")
-            //
-            // (C3)
-            // quarkus.cxf.endpoint."io.app.ws.HelloWorldImpl".implementor=null
-            // quarkus.cxf.endpoint."io.app.ws.HelloWorldImpl".path=null
-            //
-            // @WebService(serviceName=myhw) class HelloWorldImpl {} => .path("/myhw")
-            // @WebService() class HelloWorldImpl {} => .path("/io/app/ws/HelloWorldImpl")
-
-            //
             // Is there a configured EP matching this service by .implementor?
             //
             String cfgImplementor = cxfEndPointConfig.implementor.orElse(null);
@@ -124,8 +68,9 @@ public class CXFServiceData {
                 matching.add(kv);
                 continue;
             }
-
+            //
             // How about the config key? Does he match this service implementor?
+            //
             if (wsid.equals(this.impl)) {
                 matching.add(kv);
                 continue;
@@ -139,8 +84,13 @@ public class CXFServiceData {
         // servlet out of each matching configuration.
         if (matching.isEmpty()) {
             // Depending on (additional) config values various mount strategies could be used
-            // as default. To avoid collisions, we start using the implementor's name.
-            services.add(new CXFServletInfo(this, null, String.format("/%s", this.impl.trim().replace('.', '/'))));
+            // as default.
+            // changed: To avoid collisions, we start using the implementor's name instead of SEI name.
+            //
+            // If "serviceName" is present, the go ahead with that name otherwise use Implementor's name.
+            String servicepath = ofNullable(this.serviceName)
+                    .orElseGet(() -> this.impl.trim().replace('.', '/'));
+            services.add(new CXFServletInfo(this, null, format("/%s", servicepath)));
         } else {
             matching.stream()
                     .map(kv -> {
@@ -158,12 +108,17 @@ public class CXFServiceData {
 
                         // Precondition: The current config value (kv) matches this service.
 
-                        // If config key starts with "/" then key is used as relative service path.
+                        // The servicepath is given by the current configitems's key.
+
                         if (wsid.startsWith("/")) {
                             return new CXFServletInfo(this, cfg, wsid);
                         }
-                        // otherwise use key as path
-                        return new CXFServletInfo(this, cfg, String.format("/%s", wsid));
+                        String servicepath;
+                        servicepath = Optional.ofNullable(this.serviceName).orElse(wsid);
+                        if (!servicepath.startsWith("/")) {
+                            servicepath = format("/%s", servicepath);
+                        }
+                        return new CXFServletInfo(this, cfg, servicepath);
                     })
                     .forEach(services::add);
         }

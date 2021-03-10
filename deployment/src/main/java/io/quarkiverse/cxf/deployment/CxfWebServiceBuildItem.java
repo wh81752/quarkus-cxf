@@ -21,18 +21,22 @@ import io.quarkus.builder.item.MultiBuildItem;
 public final class CxfWebServiceBuildItem extends MultiBuildItem {
     static private final List<String> EMPTY = unmodifiableList(new ArrayList<>());
     private final List<String> classNames = new ArrayList<>();
-    private final Implementor implementor;
+    private final @Nullable Implementor implementor;
     private final SEI sei;
     private final String soapBinding;
     private final String wsName;
     private final String wsNamespace;
-    private final boolean isClient;
+    private final @Nullable String serviceName;
 
+    /**
+     * Although public better to use CxfWebServiceBuildItemBuilder for building.
+     */
     public CxfWebServiceBuildItem(
             SEI sei,
             String soapBinding,
             String wsNamespace,
             String wsName,
+            @Nullable String serviceName,
             @Nullable List<String> classNames,
             @Nullable Implementor implementor) {
         Objects.requireNonNull(sei);
@@ -40,12 +44,16 @@ public final class CxfWebServiceBuildItem extends MultiBuildItem {
         Objects.requireNonNull(wsNamespace);
         Objects.requireNonNull(wsName);
         this.classNames.addAll(Optional.of(classNames).orElse(EMPTY));
-        this.implementor = ofNullable(implementor).orElse(null);
-        this.isClient = (implementor == null);
+        this.implementor = implementor;
         this.sei = sei;
         this.soapBinding = soapBinding;
         this.wsName = wsName;
         this.wsNamespace = wsNamespace;
+        this.serviceName = serviceName;
+        // PostConditions:
+        if (this.hasImplementor()) {
+            Objects.requireNonNull(this.serviceName);
+        }
     }
 
     public SEI getSei() {
@@ -68,12 +76,16 @@ public final class CxfWebServiceBuildItem extends MultiBuildItem {
         return wsNamespace;
     }
 
-    public Implementor getImplementor() {
+    public @Nullable Implementor getImplementor() {
         return implementor;
     }
 
+    public @Nullable String getServiceName() {
+        return this.serviceName;
+    }
+
     public boolean IsClient() {
-        return isClient;
+        return (implementor == null);
     }
 
     public boolean IsService() {
@@ -95,20 +107,28 @@ public final class CxfWebServiceBuildItem extends MultiBuildItem {
         cxf.sei = this.getSei().classInfo.name().toString();
         cxf.wsName = this.getWsName();
         cxf.wsNamespace = this.getWsNamespace();
+        cxf.serviceName = this.getServiceName();
         return cxf;
 
     }
 
-    public static CxfWebServiceBuildItemBuilder builder(SEI ws) {
-        return new CxfWebServiceBuildItemBuilder(ws);
+    /**
+     * Create a WebService item out of a class previously identified as SEI.
+     */
+    public static CxfWebServiceBuildItemBuilder builder(SEI sei) {
+        return new CxfWebServiceBuildItemBuilder(sei);
     }
 
-    //    public static CxfWebServiceBuildItemBuilder builder(CxfWebServiceBuildItem ws) {
-    //        return new CxfWebServiceBuildItemBuilder(ws);
-    //    }
-    //
-    //    public static CxfWebServiceBuildItemBuilder builder(CxfWebServiceBuildItemBuilder ws) {
-    //        return new CxfWebServiceBuildItemBuilder(ws.build());
-    //    }
+    /**
+     * Use this function to get builder representing the Implementor of an SEI. This is
+     * just a convenience function for
+     * 
+     * <pre>
+     * builder(sei).withImplementor(impl)
+     * </pre>
+     */
+    public static CxfWebServiceBuildItemBuilder implbuilder(Implementor impl, SEI sei) {
+        return builder(sei).withImplementor(impl);
+    }
 
 }
