@@ -1,29 +1,24 @@
 package io.quarkiverse.cxf.deployment;
 
-import static io.quarkiverse.cxf.deployment.SEI.assertWebService;
-
-import java.lang.reflect.Modifier;
-import java.util.Objects;
-
 import org.jboss.jandex.ClassInfo;
 
 /**
- * Class Documentation
+ * A class representing a @WebService implementor.
  *
  * <p>
- * What is the point of this class?
+ * This immutable class ensures certain @WebService Implementor properties of the Class {@code classInfo }wrapped:
+ * <ul>
+ * <li>The class is annotated with @WebService</li>
+ * <li>The class is _not_ an interface</li>
+ * </ul>
  *
- * @author geronimo1
+ * @author wh81752
  */
-public class Implementor {
-    final public ClassInfo classInfo;
-
+public class Implementor extends WebService {
     public Implementor(ClassInfo classInfo) {
-        Objects.requireNonNull(classInfo);
-        assertWebService(classInfo);
-        this.classInfo = classInfo;
-        if (Modifier.isInterface(classInfo.flags())) {
-            throw new IllegalArgumentException("interface expected: " + classInfo);
+        super(classInfo);
+        if (!isClass()) {
+            throw new IllegalArgumentException("interface cannot be an implementor: " + classInfo);
         }
     }
 
@@ -34,18 +29,4 @@ public class Implementor {
                 '}';
     }
 
-    @Override
-    public boolean equals(Object o) {
-        if (this == o)
-            return true;
-        if (o == null || getClass() != o.getClass())
-            return false;
-        Implementor that = (Implementor) o;
-        return Objects.equals(classInfo, that.classInfo);
-    }
-
-    @Override
-    public int hashCode() {
-        return Objects.hash(classInfo);
-    }
 }

@@ -25,12 +25,37 @@ import org.wildfly.common.annotation.Nullable;
 public class CxfWebServiceBuildItemBuilder {
     static private final List<String> EMPTY = unmodifiableList(new ArrayList<>());
     public List<String> classNames = new ArrayList<>();
-    public Implementor implementor = null;
+    public @Nullable Implementor implementor = null;
     public SEI sei;
     public String soapBinding;
-    public String wsName;
-    public String wsNamespace;
-    public boolean isClient = true;
+    // @WebService(name="..")
+    // Specifies the name of the service interface. This property is mapped to the name attribute of the
+    // wsdl:portType element that defines the service's interface in a WSDL contract. The default is to
+    // append PortType to the name of the implementation class.
+    public @Nullable String wsName;
+    // @WebService(targetNamespace="..")
+    // Specifies the target namespace under which the service is defined. If this property is not specified,
+    // the target namespace is derived from the package name.
+    public @Nullable String wsNamespace;
+    // @WebService(wsdlLocation="..")
+    // Specifies the target namespace under which the service is defined. If this property is not specified,
+    // the target namespace is derived from the package name.
+    public @Nullable String wsdlLocation;
+    // @WebService(serviceName="..")
+    // Specifies the name of the published service. This property is mapped to the name attribute of the
+    // wsdl:service element that defines the published service. The default is to use the name of the service's
+    // implementation class. Note: Not allowed on the SEI
+    public @Nullable String serviceName;
+    // @WebService(endpointInterface="..")
+    // Specifies the full name of the SEI that the implementation class implements. This property is only used
+    // when the attribute is used on a service implementation class. Note: Not allowed on the SEI
+    public @Nullable String endpointInterface;
+    // @WebService(portName="..")
+    // Specifies the name of the endpoint at which the service is published. This property is mapped to the
+    // name attribute of the wsdl:port element that specifies the endpoint details for a published service.
+    // The default is the append Port to the name of the service's implementation class. Note: Not allowed
+    // on the SEI
+    public @Nullable String portName;
 
     /**
      * Derive a starter build item from a class annotated with @WebService.
@@ -38,30 +63,9 @@ public class CxfWebServiceBuildItemBuilder {
     public CxfWebServiceBuildItemBuilder(SEI sei) {
         Objects.requireNonNull(sei);
         this.sei = sei;
-        // Until we know better assume SOAP 1.1
-        // TODO: lookup SOAP binding
         this.soapBinding = ofNullable(soapBindingFrom(sei.classInfo)).orElse(SOAPBinding.SOAP11HTTP_BINDING);
-        // Derive SEI's name from annotated class. You can override later once you
-        // know better who the SEI really is.
-        // Derive service name and namespace from given annotation class. Override
-        // if you know better.
-        this.wsName = ofNullable(wsName(sei.classInfo)).orElse("");
-        this.wsNamespace = ofNullable(wsNamespace(sei.classInfo)).orElseGet(() -> {
-            return deriveNamespaceFromPackage(sei.classInfo.name().toString());
-        });
-    }
-
-    /**
-     * Create a new builder based on an already existing webservice item, then use withXX() methods to change properties
-     * according to your needs.
-     */
-    public CxfWebServiceBuildItemBuilder(CxfWebServiceBuildItem ws) {
-        this.implementor = ws.getImplementor();
-        this.sei = ws.getSei();
-        this.soapBinding = ws.getSoapBinding();
-        this.wsName = ws.getWsName();
-        this.wsNamespace = ws.getWsNamespace();
-        this.withClassNames(ws.getClassNames());
+        this.wsName = wsName(sei.classInfo);
+        this.wsNamespace = wsNamespace(sei.classInfo);
     }
 
     //
@@ -71,8 +75,11 @@ public class CxfWebServiceBuildItemBuilder {
         return new CxfWebServiceBuildItem(
                 this.sei,
                 this.soapBinding,
-                this.wsNamespace,
-                this.wsName,
+                ofNullable(this.wsNamespace).orElseGet(() -> {
+                    return deriveNamespaceFromPackage(sei.classInfo.name().toString());
+                }),
+                ofNullable(this.wsName).orElse(""),
+                this.serviceName,
                 this.classNames,
                 this.implementor);
     }
@@ -104,15 +111,14 @@ public class CxfWebServiceBuildItemBuilder {
     }
 
     /**
-     * Using withImplementor() changes the underlying semantics. The builder
-     * represents now the given implementor and no longer the SEI. Using this
-     * method more than once doesn't make sense.
+     * Using withImplementor() changes the underlying semantics. The builder represents now the given implementor and no
+     * longer the SEI. Using this method more than once doesn't make sense.
      */
     public CxfWebServiceBuildItemBuilder withImplementor(Implementor impl) {
         Objects.requireNonNull(impl);
         this.implementor = impl;
-        this.isClient = false;
         this.soapBinding = ofNullable(soapBindingFrom(impl.classInfo)).orElse(this.soapBinding);
+        this.serviceName = impl.serviceName();
         this.wsName = this.implementor.classInfo.name().toString();
         if (this.wsName.contains(".")) {
             this.wsName = wsName.substring(wsName.lastIndexOf('.') + 1);
@@ -193,7 +199,7 @@ public class CxfWebServiceBuildItemBuilder {
                 ", soapBinding='" + soapBinding + '\'' +
                 ", wsName='" + wsName + '\'' +
                 ", wsNamespace='" + wsNamespace + '\'' +
-                ", isClient=" + isClient +
+                ", isClient=" + hasImpl() +
                 '}';
     }
 
@@ -204,9 +210,10 @@ public class CxfWebServiceBuildItemBuilder {
         if (o == null || getClass() != o.getClass())
             return false;
         CxfWebServiceBuildItemBuilder that = (CxfWebServiceBuildItemBuilder) o;
-        return isClient == that.isClient && Objects.equals(
+        return Objects.equals(
                 classNames,
-                that.classNames) && Objects.equals(implementor, that.implementor) && Objects.equals(
+                that.classNames) && Objects.equals(implementor, that.implementor)
+                && Objects.equals(
                         sei,
                         that.sei)
                 && Objects.equals(soapBinding, that.soapBinding) && Objects.equals(
@@ -217,6 +224,6 @@ public class CxfWebServiceBuildItemBuilder {
 
     @Override
     public int hashCode() {
-        return Objects.hash(classNames, implementor, sei, soapBinding, wsName, wsNamespace, isClient);
+        return Objects.hash(classNames, implementor, sei, soapBinding, wsName, wsNamespace);
     }
 }
